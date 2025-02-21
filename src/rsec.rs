@@ -1,6 +1,8 @@
 // based on code from https://en.wikiversity.org/wiki/Reed%E2%80%93Solomon_codes_for_coders
 use crate::tables::{GF_EXP, GF_LOG};
 
+const QR_FORMAT_GENERATOR: u32 = 0x537;
+
 #[inline]
 pub fn gf_add(x: u8, y: u8) -> u8 {
     x ^ y
@@ -31,11 +33,9 @@ pub fn gf_div(x: u8, y: u8) -> u8 {
 
 pub fn poly_mul(x: &[u8], y: &[u8]) -> Vec<u8> {
     let mut res = vec![0u8; x.len() + y.len() - 1];
-    println!("{}", res.len());
 
     for j in 0..y.len() {
         for i in 0..x.len() {
-            println!("i: {}, j: {}", i, j);
             res[i + j] ^= gf_mul(x[i], y[j]);
         }
     }
@@ -48,7 +48,6 @@ pub fn rs_generator_poly(num_ec_blocks: usize) -> Vec<u8> {
     let mut res = vec![1];
     for exp in GF_EXP.iter().take(num_ec_blocks).cloned() {
         let curr = vec![1, exp];
-        println!("res: {:?}, curr: {:?}", res, curr);
         res = poly_mul(&res, &curr);
     }
     res
@@ -78,6 +77,23 @@ pub fn rs_encode(data: &[u8], num_ec_blocks: usize) -> Vec<u8> {
 
     res[..data.len()].copy_from_slice(data);
     res
+}
+
+pub fn qr_format_check(fmt: u32) -> u32 {
+    let mut res = fmt;
+    for i in (0..=4).rev() {
+        if (res & (1 << (i + 10))) != 0 {
+            res ^= QR_FORMAT_GENERATOR << i;
+        }
+    }
+    res
+}
+
+pub fn qr_format_encode(fmt: u8) -> u32 {
+    if fmt > 0b11111 {
+        panic!("tried to encode invalid format!")
+    }
+    ((fmt as u32) << 10) | qr_format_check((fmt as u32) << 10)
 }
 
 #[cfg(test)]
@@ -164,5 +180,10 @@ mod tests {
                 0x11, 0xEC, 0x11, 0xEC, 0x11, 0xD7, 0x39, 0xC0, 0x0C, 0x03, 0x43, 0x5C,
             ]
         )
+    }
+
+    #[test]
+    fn test_format_encode() {
+        assert_eq!(qr_format_encode(0b00011), 0b000111101011001)
     }
 }
