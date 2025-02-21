@@ -29,7 +29,7 @@ pub fn gf_div(x: u8, y: u8) -> u8 {
     }
 }
 
-pub fn poly_mul(x: &Vec<u8>, y: &Vec<u8>) -> Vec<u8> {
+pub fn poly_mul(x: &[u8], y: &[u8]) -> Vec<u8> {
     let mut res = vec![0u8; x.len() + y.len() - 1];
     println!("{}", res.len());
 
@@ -46,15 +46,15 @@ pub fn poly_mul(x: &Vec<u8>, y: &Vec<u8>) -> Vec<u8> {
 // this kinda sucks, maybe make a lookup table?
 pub fn rs_generator_poly(num_ec_blocks: usize) -> Vec<u8> {
     let mut res = vec![1];
-    for i in 0..num_ec_blocks {
-        let curr = vec![1, GF_EXP[i]];
+    for exp in GF_EXP.iter().take(num_ec_blocks).cloned() {
+        let curr = vec![1, exp];
         println!("res: {:?}, curr: {:?}", res, curr);
         res = poly_mul(&res, &curr);
     }
     res
 }
 
-pub fn rs_encode(data: &Vec<u8>, num_ec_blocks: usize) -> Vec<u8> {
+pub fn rs_encode(data: &[u8], num_ec_blocks: usize) -> Vec<u8> {
     if data.len() + num_ec_blocks > 255 {
         panic!(
             "message too long! was {} but max is 255!",
