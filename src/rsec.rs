@@ -3,12 +3,10 @@ use crate::tables::{GF_EXP, GF_LOG};
 
 const QR_FORMAT_GENERATOR: u32 = 0x537;
 
-#[inline]
 pub fn gf_add(x: u8, y: u8) -> u8 {
     x ^ y
 }
 
-#[inline]
 pub fn gf_sub(x: u8, y: u8) -> u8 {
     x ^ y
 }

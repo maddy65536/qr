@@ -1,6 +1,9 @@
+mod bitstream;
+mod encoding;
 mod rsec;
 mod tables;
 
+use bitstream::Bitstream;
 use rsec::rs_encode;
 
 fn main() {
