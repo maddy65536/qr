@@ -1,4 +1,5 @@
 /// A poorly implemented bitstream using a vector of booleans
+#[derive(Debug, Default)]
 pub struct Bitstream {
     data: Vec<bool>,
 }
@@ -54,15 +55,9 @@ impl Bitstream {
     }
 }
 
-impl From<Vec<bool>> for Bitstream {
-    fn from(value: Vec<bool>) -> Self {
-        Self { data: value }
-    }
-}
-
-impl Into<Vec<bool>> for Bitstream {
-    fn into(self) -> Vec<bool> {
-        self.data
+impl From<Bitstream> for Vec<bool> {
+    fn from(value: Bitstream) -> Self {
+        value.data
     }
 }
 

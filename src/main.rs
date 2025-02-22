@@ -14,4 +14,7 @@ fn main() {
     let res = rs_encode(&data, 7);
     println!("input:  {:02X?}", data);
     println!("result: {:02X?}", res);
+
+    let b = Bitstream::new();
+    let c: Vec<bool> = b.into();
 }
