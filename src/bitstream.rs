@@ -9,6 +9,12 @@ impl Bitstream {
         Self { data: vec![] }
     }
 
+    pub fn from_bytes(b: &[u8]) -> Self {
+        let mut res = Self::new();
+        res.push_bytes(b);
+        res
+    }
+
     pub fn push(&mut self, data: bool) {
         self.data.push(data);
     }
@@ -17,7 +23,7 @@ impl Bitstream {
         if len > 8 {
             panic!("can't push {} bits of a u8!", len);
         }
-        for i in ((8 - len)..8).rev() {
+        for i in (0..len).rev() {
             self.data.push((data >> i) & 1 == 1);
         }
     }
@@ -26,7 +32,7 @@ impl Bitstream {
         if len > 16 {
             panic!("can't push {} bits of a u16!", len);
         }
-        for i in ((16 - len)..16).rev() {
+        for i in (0..len).rev() {
             self.data.push((data >> i) & 1 == 1);
         }
     }
@@ -35,13 +41,19 @@ impl Bitstream {
         if len > 32 {
             panic!("can't push {} bits of a u32!", len);
         }
-        for i in ((32 - len)..32).rev() {
+        for i in (0..len).rev() {
             self.data.push((data >> i) & 1 == 1);
         }
     }
 
+    pub fn push_bytes(&mut self, data: &[u8]) {
+        for b in data {
+            self.push_u8(*b, 8);
+        }
+    }
+
     // mostly for testing purposes
-    pub fn into_bytes(self) -> Vec<u8> {
+    pub fn as_bytes(&self) -> Vec<u8> {
         self.data
             .chunks(8)
             .map(|chunk| {
@@ -52,6 +64,16 @@ impl Bitstream {
                 res
             })
             .collect()
+    }
+
+    /// length in bytes
+    pub fn len(&self) -> usize {
+        self.data.len().div_ceil(8)
+    }
+
+    /// how many bits free in current byte
+    pub fn free_bits(&self) -> usize {
+        self.data.len() % 8
     }
 }
 
@@ -81,7 +103,7 @@ mod tests {
         b.push(false);
         b.push(true);
 
-        assert_eq!(b.into_bytes(), vec![0b01010101, 0b10100000])
+        assert_eq!(b.as_bytes(), vec![0b01010101, 0b10100000])
     }
 
     #[test]
@@ -89,22 +111,22 @@ mod tests {
         let mut b = Bitstream::new();
         b.push_u8(0xAB, 8);
         b.push_u8(0xAA, 3);
-        assert_eq!(b.into_bytes(), vec![0xAB, 0xA0])
+        assert_eq!(b.as_bytes(), vec![0xAB, 0x40])
     }
 
     #[test]
     fn test_bitstream_u16() {
         let mut b = Bitstream::new();
         b.push_u16(0xABCD, 16);
-        b.push_u16(0xA000, 1);
-        assert_eq!(b.into_bytes(), vec![0xAB, 0xCD, 0x80])
+        b.push_u16(0x0005, 1);
+        assert_eq!(b.as_bytes(), vec![0xAB, 0xCD, 0x80])
     }
 
     #[test]
     fn test_bitstream_u32() {
         let mut b = Bitstream::new();
         b.push_u32(0xABCDEF12, 32);
-        b.push_u32(0xA0000000, 1);
-        assert_eq!(b.into_bytes(), vec![0xAB, 0xCD, 0xEF, 0x12, 0x80])
+        b.push_u32(0x00000005, 1);
+        assert_eq!(b.as_bytes(), vec![0xAB, 0xCD, 0xEF, 0x12, 0x80])
     }
 }

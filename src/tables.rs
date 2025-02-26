@@ -30,3 +30,11 @@ pub const GF_LOG: [usize; 256] = [
     169, 160, 81, 11, 245, 22, 235, 122, 117, 44, 215, 79, 174, 213, 233, 230, 231, 173, 232, 116,
     214, 244, 234, 168, 80, 88, 175,
 ];
+
+// ordered by bit length of number
+pub const LENGTH_BITS: [[u8; 3]; 4] = [
+    [10, 12, 14], // numberic    0b0001
+    [9, 11, 13],  // alphanumeric 0b0010
+    [8, 16, 16],  // byte/eci     0b0100/0b0111
+    [8, 10, 12],  // kanji        0b1000
+];
