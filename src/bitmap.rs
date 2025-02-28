@@ -47,10 +47,8 @@ pub fn make_bitmap(data: &[Vec<bool>]) -> Option<Vec<u8>> {
         .map(|r| {
             r.iter()
                 .flat_map(|b| if *b { [0, 0, 0] } else { [255, 255, 255] })
-                .collect::<Vec<u8>>()
         })
-        .flat_map(|r| [r, iter::repeat_n(0, width % 4).collect()])
-        .flatten()
+        .flat_map(|r| r.chain(iter::repeat_n(0, width % 4)))
         .collect();
     res.extend_from_slice(&pixel_data);
 
