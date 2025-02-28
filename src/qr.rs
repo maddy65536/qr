@@ -1,10 +1,22 @@
 #[derive(Debug)]
 pub struct Qr {
-    data: Vec<Vec<bool>>,
+    pub data: Vec<Vec<bool>>,
 }
 
 impl Qr {
-    fn make_blank(version: u8) -> Self {
+    pub fn make_blank(version: u8) -> Self {
         Self { data: vec![] }
+    }
+
+    pub fn make_test_data() -> Self {
+        Self {
+            data: vec![
+                vec![false, true, false, true, false],
+                vec![false, true, false, true, false],
+                vec![false, false, false, false, false],
+                vec![true, false, false, false, true],
+                vec![false, true, true, true, false],
+            ],
+        }
     }
 }

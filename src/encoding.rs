@@ -87,11 +87,11 @@ mod tests {
 
     #[test]
     fn test_detect_mode() {
-        assert_eq!(detect_mode("123456".into()), Mode::Numeric);
-        assert_eq!(detect_mode("123456ABC".into()), Mode::Alphanumeric);
-        assert_eq!(detect_mode("123456ABCabc'!%&".into()), Mode::Byte);
-        assert_eq!(detect_mode("123456ABCDEFabcdef'!%&¥".into()), Mode::Eci);
-        assert_eq!(detect_mode("一二三四五六七八九十".into()), Mode::Eci);
+        assert_eq!(detect_mode("123456"), Mode::Numeric);
+        assert_eq!(detect_mode("123456ABC"), Mode::Alphanumeric);
+        assert_eq!(detect_mode("123456ABCabc'!%&"), Mode::Byte);
+        assert_eq!(detect_mode("123456ABCDEFabcdef'!%&¥"), Mode::Eci);
+        assert_eq!(detect_mode("一二三四五六七八九十"), Mode::Eci);
     }
 
     #[test]
