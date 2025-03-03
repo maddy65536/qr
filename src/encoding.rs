@@ -12,10 +12,10 @@ pub enum Mode {
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ECLevel {
-    Low,
-    Medium,
-    Quartile,
-    High,
+    Low = 0b01,
+    Medium = 0b00,
+    Quartile = 0b11,
+    High = 0b10,
 }
 
 // should add kanji mode and potentially support for mixing modes

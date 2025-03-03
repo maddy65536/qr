@@ -20,3 +20,11 @@ impl Qr {
         }
     }
 }
+
+pub fn version_to_width(version: u8) -> Option<usize> {
+    if version < 1 || version > 40 {
+        None
+    } else {
+        Some(((version * 4) + 17) as usize)
+    }
+}
