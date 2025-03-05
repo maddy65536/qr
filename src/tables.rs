@@ -32,7 +32,7 @@ pub const GF_LOG: [usize; 256] = [
 ];
 
 // ordered by bit length of number
-pub const LENGTH_BITS: [[u8; 3]; 4] = [
+pub const LENGTH_BITS: [[usize; 3]; 4] = [
     [10, 12, 14], // numberic    0b0001
     [9, 11, 13],  // alphanumeric 0b0010
     [8, 16, 16],  // byte/eci     0b0100/0b0111

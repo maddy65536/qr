@@ -1,4 +1,7 @@
-use crate::{bitstream::Bitstream, tables::LENGTH_BITS};
+use crate::{
+    bitstream::Bitstream,
+    tables::{DATA_CAPACITY, LENGTH_BITS},
+};
 
 // ignoring structured apend for now
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -10,7 +13,7 @@ pub enum Mode {
     Eci = 0b0111,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum ECLevel {
     Low = 0b01,
     Medium = 0b00,
@@ -34,7 +37,7 @@ pub fn detect_mode(data: &str) -> Mode {
     }
 }
 
-pub fn get_length_bits(mode: Mode, version: u8) -> Option<u8> {
+pub fn get_length_bits(mode: Mode, version: usize) -> Option<usize> {
     let index = match version {
         1..=9 => 0,
         10..=26 => 1,
@@ -44,15 +47,25 @@ pub fn get_length_bits(mode: Mode, version: u8) -> Option<u8> {
     Some(LENGTH_BITS[(mode as u32).ilog2() as usize][index])
 }
 
-// todo: finish this lol
-pub fn detect_version(mode: Mode, len: usize) -> u8 {
-    1
+// find smallest version that fits data
+pub fn detect_version(mode: Mode, len: usize, ec: ECLevel) -> Option<usize> {
+    for (v, row) in DATA_CAPACITY.iter().enumerate() {
+        let capacity = row[ec as usize] * 8;
+        let size = get_length_bits(mode, v + 1)? + (len * 8);
+        if size <= capacity {
+            return Some(v + 1);
+        }
+    }
+    None
 }
 
-pub fn encode(data: String, mode: Mode, version: u8, num_codewords: usize) -> Option<Vec<u8>> {
+pub fn encode(data: String, mode: Mode, version: usize, ec: ECLevel) -> Option<Vec<u8>> {
     if mode != Mode::Byte {
         todo!("i'll get to it")
     }
+
+    let num_codewords = DATA_CAPACITY[version - 1][ec as usize];
+    println!("num codewords: {}", num_codewords);
 
     let mut res = Bitstream::new();
 
@@ -68,7 +81,7 @@ pub fn encode(data: String, mode: Mode, version: u8, num_codewords: usize) -> Op
     }
 
     res.push_u8(0, 4); // insert terminator
-    res.push_u8(0, res.free_bits() as u8); // fill remaining bits in last byte
+    res.push_u8(0, res.free_bits()); // fill remaining bits in last byte
 
     // insert padding
     let padding: Vec<u8> = [0xEC, 0x11]

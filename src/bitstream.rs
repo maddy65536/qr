@@ -19,7 +19,7 @@ impl Bitstream {
         self.data.push(data);
     }
 
-    pub fn push_u8(&mut self, data: u8, len: u8) {
+    pub fn push_u8(&mut self, data: u8, len: usize) {
         if len > 8 {
             panic!("can't push {} bits of a u8!", len);
         }
@@ -28,7 +28,7 @@ impl Bitstream {
         }
     }
 
-    pub fn push_u16(&mut self, data: u16, len: u8) {
+    pub fn push_u16(&mut self, data: u16, len: usize) {
         if len > 16 {
             panic!("can't push {} bits of a u16!", len);
         }
@@ -37,7 +37,7 @@ impl Bitstream {
         }
     }
 
-    pub fn push_u32(&mut self, data: u32, len: u8) {
+    pub fn push_u32(&mut self, data: u32, len: usize) {
         if len > 32 {
             panic!("can't push {} bits of a u32!", len);
         }

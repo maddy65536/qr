@@ -1,35 +1,50 @@
-use std::{iter, path::Iter};
+use std::iter;
 
-use crate::tables::ALIGNMENT_PATTERNS;
+use crate::encoding::{self, ECLevel};
+use crate::tables::{ALIGNMENT_PATTERNS, BLOCK_GROUPS};
+use crate::{bitstream, rsec};
 
 #[derive(Debug)]
 pub struct Qr {
     pub data: Vec<Vec<bool>>,
     version: usize,
+    ec: ECLevel,
 }
 
 impl Qr {
-    pub fn make_blank(version: usize) -> Self {
+    pub fn make_blank(version: usize, ec: ECLevel) -> Self {
         if !(1..=40).contains(&version) {
             panic!("tried to make qr code with invalid version!");
         }
         Self {
             data: make_fixed_patterns(version).unwrap(),
             version,
+            ec,
         }
     }
 
-    pub fn make_test_data() -> Self {
-        Self {
-            data: vec![
-                vec![false, true, false, true, false],
-                vec![false, true, false, true, false],
-                vec![false, false, false, false, false],
-                vec![true, false, false, false, true],
-                vec![false, true, true, true, false],
-            ],
-            version: 0,
-        }
+    pub fn make_qr(data: &str, ec: ECLevel) -> Option<Self> {
+        // encode data
+        let mode = encoding::detect_mode(data);
+        println!("mode: {:?}", mode);
+        // need a better length calculation for the other modes but it works for now
+        let version = encoding::detect_version(mode, data.len(), ec)?;
+        println!("version: {:?}", version);
+        let encoded = encoding::encode(data.into(), mode, version, ec).unwrap();
+        println!("encoded: {:02X?} len: {}", encoded, encoded.len());
+        let final_bytes = rsec::rs_encode(&encoded, BLOCK_GROUPS[version - 1][ec as usize].0.0);
+        println!("stream: {:02X?}", final_bytes);
+        let stream: Vec<bool> = bitstream::Bitstream::from_bytes(&final_bytes).into();
+
+        // draw qr code
+        let mut qr = Self::make_blank(version, ec);
+        let order = ModuleOrder::new(version);
+        stream
+            .iter()
+            .zip(order)
+            .for_each(|(bit, pos)| qr.data[pos.0][pos.1] = *bit);
+
+        Some(qr)
     }
 }
 
@@ -140,8 +155,18 @@ pub fn is_alignment_pattern(version: usize, pos: (usize, usize)) -> bool {
     false
 }
 
-/// is this postition a data module for the given version?
-pub fn is_data_module(version: usize, pos: (usize, usize)) -> bool {
+#[derive(Debug, PartialEq, Eq)]
+pub enum ModuleType {
+    Finder,
+    Alignment,
+    Timing,
+    Pixel,
+    Version,
+    Format,
+    Data,
+}
+
+pub fn module_type(version: usize, pos: (usize, usize)) -> ModuleType {
     // just kinda give up on invalid ones sorry
     if !(1..=40).contains(&version) {
         panic!("invalid version!")
@@ -157,22 +182,22 @@ pub fn is_data_module(version: usize, pos: (usize, usize)) -> bool {
         || ((0..=7).contains(&pos.0) && ((max - 8)..=(max - 1)).contains(&pos.1))
         || ((max - 8)..=(max - 1)).contains(&pos.0) && ((0..=7).contains(&pos.1))
     {
-        return false;
+        return ModuleType::Finder;
     }
 
     // alignment patterns
     if is_alignment_pattern(version, pos) {
-        return false;
+        return ModuleType::Alignment;
     }
 
     // timing patterns
     if pos.0 == 6 || pos.1 == 6 {
-        return false;
+        return ModuleType::Timing;
     }
 
     // that one pixel
     if pos.0 == max - 8 && pos.1 == 8 {
-        return false;
+        return ModuleType::Pixel;
     }
 
     // version info for versions > 6
@@ -180,17 +205,22 @@ pub fn is_data_module(version: usize, pos: (usize, usize)) -> bool {
         && ((((max - 11)..=(max - 9)).contains(&pos.0) && (0..=5).contains(&pos.1))
             || (((0..=5).contains(&pos.0)) && ((max - 11)..=(max - 9)).contains(&pos.1)))
     {
-        return false;
+        return ModuleType::Version;
     }
 
     // format info
     if (pos.0 == 8 && ((0..=8).contains(&pos.1) || ((max - 8)..=(max - 1)).contains(&pos.1)))
         || (pos.1 == 8 && ((0..=8).contains(&pos.0) || ((max - 8)..=(max - 1)).contains(&pos.0)))
     {
-        return false;
+        return ModuleType::Format;
     }
 
-    true
+    ModuleType::Data
+}
+
+/// is this postition a data module for the given version?
+pub fn is_data_module(version: usize, pos: (usize, usize)) -> bool {
+    module_type(version, pos) == ModuleType::Data
 }
 
 pub struct ModuleOrder {
