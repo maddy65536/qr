@@ -2,19 +2,30 @@ use crate::qr::Qr;
 use std::iter;
 
 const BMP_HEADER_LEN: usize = 54;
+const SCALE: usize = 4;
 
 pub fn qr_to_bitmap(qr: &Qr) -> Option<Vec<u8>> {
-    let mut bordered: Vec<Vec<bool>> = iter::repeat_n(
-        iter::repeat_n(false, qr.data[0].len() + 8).collect(),
-        qr.data.len() + 8,
+    let mut res: Vec<Vec<bool>> = iter::repeat_n(
+        iter::repeat_n(false, (qr.data[0].len() + 8) * SCALE).collect(),
+        (qr.data.len() + 8) * SCALE,
     )
     .collect();
-    for (i, row) in qr.data.iter().enumerate() {
-        for (j, module) in row.iter().enumerate() {
-            bordered[i + 4][j + 4] = *module;
+    for (i, row) in res
+        .iter_mut()
+        .enumerate()
+        .take((qr.data[0].len() + 4) * SCALE)
+        .skip(4 * SCALE)
+    {
+        for (j, module) in row
+            .iter_mut()
+            .enumerate()
+            .take((qr.data.len() + 4) * SCALE)
+            .skip(4 * SCALE)
+        {
+            *module = qr.data[(i / SCALE) - 4][(j / SCALE) - 4];
         }
     }
-    make_bitmap(&bordered)
+    make_bitmap(&res)
 }
 
 pub fn make_bitmap(data: &[Vec<bool>]) -> Option<Vec<u8>> {
