@@ -4,7 +4,17 @@ use std::iter;
 const BMP_HEADER_LEN: usize = 54;
 
 pub fn qr_to_bitmap(qr: &Qr) -> Option<Vec<u8>> {
-    make_bitmap(&qr.data)
+    let mut bordered: Vec<Vec<bool>> = iter::repeat_n(
+        iter::repeat_n(false, qr.data[0].len() + 8).collect(),
+        qr.data.len() + 8,
+    )
+    .collect();
+    for (i, row) in qr.data.iter().enumerate() {
+        for (j, module) in row.iter().enumerate() {
+            bordered[i + 4][j + 4] = *module;
+        }
+    }
+    make_bitmap(&bordered)
 }
 
 pub fn make_bitmap(data: &[Vec<bool>]) -> Option<Vec<u8>> {
