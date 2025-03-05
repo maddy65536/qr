@@ -1,3 +1,5 @@
+use std::iter;
+
 mod bitmap;
 mod bitstream;
 mod encoding;
@@ -19,4 +21,28 @@ fn main() {
         let bmp = bitmap::qr_to_bitmap(&test_qr).unwrap();
         std::fs::write(format!("images/{}.bmp", version), bmp).unwrap();
     }
+
+    let version = 14;
+    let size = qr::version_to_width(version).unwrap();
+    let mut test: Vec<Vec<char>> =
+        iter::repeat_n(iter::repeat_n('⬜', size).collect(), size).collect();
+    let order = qr::ModuleOrder::new(version);
+    let squares = iter::repeat_n('🟥', 8)
+        .chain(iter::repeat_n('🟧', 8))
+        .chain(iter::repeat_n('🟨', 8))
+        .chain(iter::repeat_n('🟩', 8))
+        .chain(iter::repeat_n('🟦', 8))
+        .chain(iter::repeat_n('🟪', 8))
+        .cycle();
+    order
+        //.inspect(|x| println!("generated: {:?}", x))
+        .zip(squares)
+        .for_each(|(pos, c)| test[pos.0][pos.1] = c);
+    println!(
+        "{}",
+        test.iter()
+            .map(|row| row.iter().collect::<String>())
+            .collect::<Vec<String>>()
+            .join("\n")
+    );
 }
