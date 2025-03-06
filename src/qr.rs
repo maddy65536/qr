@@ -4,7 +4,18 @@ use crate::encoding::{self, ECLevel};
 use crate::tables::{ALIGNMENT_PATTERNS, BLOCK_GROUPS};
 use crate::{bitstream, rsec};
 
-#[derive(Debug)]
+const MASKS: [fn((usize, usize)) -> bool; 8] = [
+    |p| (p.0 + p.1) % 2 == 0,
+    |p| p.0 % 2 == 0,
+    |p| p.1 % 3 == 0,
+    |p| (p.0 + p.1) % 3 == 0,
+    |p| ((p.0 / 2) + (p.1 / 3)) % 2 == 0,
+    |p| (p.0 * p.1) % 2 + (p.0 * p.1) % 3 == 0,
+    |p| ((p.0 * p.1) % 2 + (p.0 * p.1) % 3) % 2 == 0,
+    |p| ((p.0 + p.1) % 2 + (p.0 + p.1) % 3) % 2 == 0,
+];
+
+#[derive(Debug, Clone)]
 pub struct Qr {
     pub data: Vec<Vec<bool>>,
     version: usize,
@@ -44,8 +55,68 @@ impl Qr {
             .zip(order)
             .for_each(|(bit, pos)| qr.data[pos.0][pos.1] = *bit);
 
+        qr = apply_best_mask(&qr);
         Some(qr)
     }
+}
+
+fn apply_best_mask(qr: &Qr) -> Qr {
+    let mut choices = (0..=7).map(|n| apply_mask(qr, n));
+    choices.nth(3).unwrap()
+}
+
+fn apply_mask(qr: &Qr, mask: usize) -> Qr {
+    let mut res = qr.clone();
+    write_format(&mut res, mask);
+    for (i, row) in res.data.iter_mut().enumerate() {
+        for (j, module) in row.iter_mut().enumerate() {
+            if matches!(
+                module_type(qr.version, (i, j)),
+                ModuleType::Data | ModuleType::Format
+            ) {
+                *module = *module != MASKS[mask]((i, j));
+            }
+        }
+    }
+    res
+}
+
+fn write_format(qr: &mut Qr, mask: usize) {
+    let formcode = ((qr.ec as usize) << 3) | mask;
+    let form = rsec::qr_format_encode_masked(formcode);
+    let max = version_to_width(qr.version).unwrap() - 1;
+    //i'm just unrolling this it's probably faster anways
+    qr.data[8][0] = (form >> 14) & 1 == 1;
+    qr.data[8][1] = (form >> 13) & 1 == 1;
+    qr.data[8][2] = (form >> 12) & 1 == 1;
+    qr.data[8][3] = (form >> 11) & 1 == 1;
+    qr.data[8][4] = (form >> 10) & 1 == 1;
+    qr.data[8][5] = (form >> 9) & 1 == 1;
+    qr.data[8][7] = (form >> 8) & 1 == 1;
+    qr.data[8][8] = (form >> 7) & 1 == 1;
+    qr.data[7][8] = (form >> 6) & 1 == 1;
+    qr.data[5][8] = (form >> 5) & 1 == 1;
+    qr.data[4][8] = (form >> 4) & 1 == 1;
+    qr.data[3][8] = (form >> 3) & 1 == 1;
+    qr.data[2][8] = (form >> 2) & 1 == 1;
+    qr.data[1][8] = (form >> 1) & 1 == 1;
+    qr.data[0][8] = form & 1 == 1;
+
+    qr.data[max][8] = (form >> 14) & 1 == 1;
+    qr.data[max - 1][8] = (form >> 13) & 1 == 1;
+    qr.data[max - 2][8] = (form >> 12) & 1 == 1;
+    qr.data[max - 3][8] = (form >> 11) & 1 == 1;
+    qr.data[max - 4][8] = (form >> 10) & 1 == 1;
+    qr.data[max - 5][8] = (form >> 9) & 1 == 1;
+    qr.data[max - 6][8] = (form >> 8) & 1 == 1;
+    qr.data[8][max - 7] = (form >> 7) & 1 == 1;
+    qr.data[8][max - 6] = (form >> 6) & 1 == 1;
+    qr.data[8][max - 5] = (form >> 5) & 1 == 1;
+    qr.data[8][max - 4] = (form >> 4) & 1 == 1;
+    qr.data[8][max - 3] = (form >> 3) & 1 == 1;
+    qr.data[8][max - 2] = (form >> 2) & 1 == 1;
+    qr.data[8][max - 1] = (form >> 1) & 1 == 1;
+    qr.data[8][max] = form & 1 == 1;
 }
 
 pub fn version_to_width(version: usize) -> Option<usize> {

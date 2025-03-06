@@ -1,7 +1,8 @@
 // based on code from https://en.wikiversity.org/wiki/Reed%E2%80%93Solomon_codes_for_coders
 use crate::tables::{GF_EXP, GF_LOG};
 
-const QR_FORMAT_GENERATOR: u32 = 0x537;
+const QR_FORMAT_GENERATOR: usize = 0x537;
+const QR_FORMAT_MASK: usize = 0b101010000010010;
 
 pub fn gf_add(x: u8, y: u8) -> u8 {
     x ^ y
@@ -77,7 +78,7 @@ pub fn rs_encode(data: &[u8], num_ec_blocks: usize) -> Vec<u8> {
     res
 }
 
-pub fn qr_format_check(fmt: u32) -> u32 {
+pub fn qr_format_check(fmt: usize) -> usize {
     let mut res = fmt;
     for i in (0..=4).rev() {
         if (res & (1 << (i + 10))) != 0 {
@@ -87,11 +88,15 @@ pub fn qr_format_check(fmt: u32) -> u32 {
     res
 }
 
-pub fn qr_format_encode(fmt: u8) -> u32 {
+pub fn qr_format_encode(fmt: usize) -> usize {
     if fmt > 0b11111 {
         panic!("tried to encode invalid format!")
     }
-    ((fmt as u32) << 10) | qr_format_check((fmt as u32) << 10)
+    ((fmt as usize) << 10) | qr_format_check((fmt as usize) << 10)
+}
+
+pub fn qr_format_encode_masked(fmt: usize) -> usize {
+    qr_format_encode(fmt) ^ QR_FORMAT_MASK
 }
 
 #[cfg(test)]
