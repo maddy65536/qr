@@ -62,7 +62,7 @@ impl Qr {
 
 fn apply_best_mask(qr: &Qr) -> Qr {
     let mut choices = (0..=7).map(|n| apply_mask(qr, n));
-    choices.nth(3).unwrap()
+    choices.nth(0).unwrap()
 }
 
 fn apply_mask(qr: &Qr, mask: usize) -> Qr {
@@ -70,10 +70,7 @@ fn apply_mask(qr: &Qr, mask: usize) -> Qr {
     write_format(&mut res, mask);
     for (i, row) in res.data.iter_mut().enumerate() {
         for (j, module) in row.iter_mut().enumerate() {
-            if matches!(
-                module_type(qr.version, (i, j)),
-                ModuleType::Data | ModuleType::Format
-            ) {
+            if is_data_module(qr.version, (i, j)) {
                 *module = *module != MASKS[mask]((i, j));
             }
         }
@@ -82,8 +79,8 @@ fn apply_mask(qr: &Qr, mask: usize) -> Qr {
 }
 
 fn write_format(qr: &mut Qr, mask: usize) {
-    let formcode = ((qr.ec as usize) << 3) | mask;
-    let form = rsec::qr_format_encode_masked(formcode);
+    let form = rsec::qr_format_encode_masked(((qr.ec as usize) << 3) | mask);
+    println!("{:#15b}", form);
     let max = version_to_width(qr.version).unwrap() - 1;
     //i'm just unrolling this it's probably faster anways
     qr.data[8][0] = (form >> 14) & 1 == 1;
