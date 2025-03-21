@@ -63,7 +63,7 @@ impl Qr {
             .zip(order)
             .for_each(|(bit, pos)| qr.data[pos.0][pos.1] = *bit);
 
-        qr = apply_best_mask(&qr);
+        qr = apply_best_mask(&qr, None);
         Some(qr)
     }
 
@@ -437,9 +437,12 @@ impl Iterator for ModuleOrder {
     }
 }
 
-fn apply_best_mask(qr: &Qr) -> Qr {
-    let choices = (0..=7).map(|n| apply_mask(qr, n));
-    let res = choices.min_by_key(Qr::score).unwrap();
+fn apply_best_mask(qr: &Qr, mask: Option<usize>) -> Qr {
+    let mut choices = (0..=7).map(|n| apply_mask(qr, n));
+    if let Some(mask_choice) = mask {
+        return choices.nth(mask_choice).unwrap();
+    }
+    let res = choices.max_by_key(Qr::score).unwrap();
     println!("score: {}", res.score());
     res
 }
