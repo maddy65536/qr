@@ -1,6 +1,9 @@
+use std::collections::VecDeque;
+
 use crate::{
     bitstream::Bitstream,
-    tables::{DATA_CAPACITY, LENGTH_BITS},
+    rsec,
+    tables::{BLOCK_GROUPS, DATA_CAPACITY, LENGTH_BITS},
 };
 
 // ignoring structured apend for now
@@ -23,18 +26,20 @@ pub enum ECLevel {
 
 // should add kanji mode and potentially support for mixing modes
 pub fn detect_mode(data: &str) -> Mode {
-    if data.chars().all(|c| c.is_ascii() && c.is_numeric()) {
-        Mode::Numeric
-    } else if data
-        .chars()
-        .all(|c| c.is_ascii() && (c.is_uppercase() || c.is_numeric()))
-    {
-        Mode::Alphanumeric
-    } else if data.is_ascii() {
-        Mode::Byte
-    } else {
-        Mode::Eci
-    }
+    Mode::Byte
+
+    // if data.chars().all(|c| c.is_ascii() && c.is_numeric()) {
+    //     Mode::Numeric
+    // } else if data
+    //     .chars()
+    //     .all(|c| c.is_ascii() && (c.is_uppercase() || c.is_numeric()))
+    // {
+    //     Mode::Alphanumeric
+    // } else if data.is_ascii() {
+    //     Mode::Byte
+    // } else {
+    //     Mode::Eci
+    // }
 }
 
 pub fn get_length_bits(mode: Mode, version: usize) -> Option<usize> {
@@ -91,7 +96,67 @@ pub fn encode(data: String, mode: Mode, version: usize, ec: ECLevel) -> Option<V
         .collect();
     res.push_bytes(&padding);
 
-    Some(res.as_bytes())
+    let res_bytes = res.as_bytes();
+    Some(interleave_and_ec(&res_bytes, version, ec))
+    // Some(rsec::rs_encode(
+    //     &res_bytes,
+    //     BLOCK_GROUPS[version - 1][ec as usize].0.0,
+    // ))
+}
+
+fn interleave_and_ec(bytes: &[u8], version: usize, ec: ECLevel) -> Vec<u8> {
+    let mut groups: Vec<VecDeque<u8>> = vec![];
+    let mut ec_groups: Vec<VecDeque<u8>> = vec![];
+    let mut res: Vec<u8> = vec![];
+
+    let mut bytes_iter = bytes.iter().cloned();
+    // group 1
+    let ((num_ec_blocks, num_blocks, block_size), _) = BLOCK_GROUPS[version - 1][ec as usize];
+    for _ in 0..num_blocks {
+        let group: Vec<u8> = (&mut bytes_iter).take(block_size).collect();
+        let ec_group = rsec::rs_encode(&group, num_ec_blocks)[group.len()..].to_vec();
+        groups.push(group.into());
+        ec_groups.push(ec_group.into());
+    }
+
+    // group 2
+    if let (_, Some((num_ec_blocks, num_blocks, block_size))) =
+        BLOCK_GROUPS[version - 1][ec as usize]
+    {
+        for _ in 0..num_blocks {
+            let group: Vec<u8> = (&mut bytes_iter).take(block_size).collect();
+            let ec_group = rsec::rs_encode(&group, num_ec_blocks)[group.len()..].to_vec();
+            groups.push(group.into());
+            ec_groups.push(ec_group.into());
+        }
+    }
+
+    println!("len: {}\n{:#02x?}", ec_groups[0].len(), ec_groups);
+
+    // build result
+    let mut finished = false;
+    while !finished {
+        finished = true;
+        for group in groups.iter_mut() {
+            if !group.is_empty() {
+                finished = false;
+                res.push(group.pop_front().unwrap());
+            }
+        }
+    }
+
+    finished = false;
+    while !finished {
+        finished = true;
+        for group in ec_groups.iter_mut() {
+            if !group.is_empty() {
+                finished = false;
+                res.push(group.pop_front().unwrap());
+            }
+        }
+    }
+
+    res
 }
 
 #[cfg(test)]
@@ -114,5 +179,34 @@ mod tests {
         assert_eq!(get_length_bits(Mode::Byte, 29), Some(16));
         assert_eq!(get_length_bits(Mode::Eci, 2), Some(8));
         assert_eq!(get_length_bits(Mode::Kanji, 14), Some(10));
+    }
+
+    #[test]
+    fn test_interleave() {
+        assert_eq!(
+            interleave_and_ec(
+                &[
+                    0x41, 0x14, 0x86, 0x56, 0xC6, 0xC6, 0xF2, 0xC2, 0x07, 0x76, 0xF7, 0x26, 0xC6,
+                    0x42, 0x12, 0x03, 0x13, 0x23, 0x30, 0xEC, 0x11, 0xEC, 0x11, 0xEC, 0x11, 0xEC,
+                    0x11, 0xEC, 0x11, 0xEC, 0x11, 0xEC, 0x11, 0xEC, 0x11, 0xEC, 0x11, 0xEC, 0x11,
+                    0xEC, 0x11, 0xEC, 0x11, 0xEC, 0x11, 0xEC, 0x11, 0xEC, 0x11, 0xEC, 0x11, 0xEC,
+                    0x11, 0xEC, 0x11, 0xEC, 0x11, 0xEC, 0x11, 0xEC, 0x11, 0xEC,
+                ],
+                5,
+                ECLevel::Quartile
+            ),
+            vec![
+                0x41, 0x03, 0x11, 0x11, 0x14, 0x13, 0xEC, 0xEC, 0x86, 0x23, 0x11, 0x11, 0x56, 0x30,
+                0xEC, 0xEC, 0xC6, 0xEC, 0x11, 0x11, 0xC6, 0x11, 0xEC, 0xEC, 0xF2, 0xEC, 0x11, 0x11,
+                0xC2, 0x11, 0xEC, 0xEC, 0x07, 0xEC, 0x11, 0x11, 0x76, 0x11, 0xEC, 0xEC, 0xF7, 0xEC,
+                0x11, 0x11, 0x26, 0x11, 0xEC, 0xEC, 0xC6, 0xEC, 0x11, 0x11, 0x42, 0x11, 0xEC, 0xEC,
+                0x12, 0xEC, 0x11, 0x11, 0xEC, 0xEC, 0x4A, 0x55, 0x87, 0x87, 0x83, 0xF3, 0x93, 0x93,
+                0x59, 0x98, 0x07, 0x07, 0x2F, 0xEE, 0x29, 0x29, 0x66, 0xA5, 0x80, 0x80, 0x25, 0x27,
+                0x96, 0x96, 0xBB, 0xC8, 0x78, 0x78, 0xCF, 0xED, 0xB8, 0xB8, 0x37, 0x9F, 0x25, 0x25,
+                0xAF, 0xBE, 0xB5, 0xB5, 0xC2, 0xB1, 0xCD, 0xCD, 0x7F, 0x23, 0xDE, 0xDE, 0x6B, 0x09,
+                0xE7, 0xE7, 0xC1, 0x7A, 0x08, 0x08, 0x9D, 0x9C, 0x2C, 0x2C, 0xD1, 0xD9, 0x51, 0x51,
+                0x41, 0x38, 0xAD, 0xAD, 0x89, 0xD8, 0x50, 0x50,
+            ]
+        )
     }
 }

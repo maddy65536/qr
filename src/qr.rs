@@ -1,7 +1,7 @@
 use std::iter;
 
 use crate::encoding::{self, ECLevel};
-use crate::tables::{ALIGNMENT_PATTERNS, BLOCK_GROUPS};
+use crate::tables::{ALIGNMENT_PATTERNS, BLOCK_GROUPS, VERSION_INFO};
 use crate::{bitstream, rsec};
 
 const MASKS: [fn((usize, usize)) -> bool; 8] = [
@@ -53,9 +53,7 @@ impl Qr {
         println!("version: {:?}", version);
         let encoded = encoding::encode(data.into(), mode, version, ec).unwrap();
         println!("encoded: {:02X?} len: {}", encoded, encoded.len());
-        let final_bytes = rsec::rs_encode(&encoded, BLOCK_GROUPS[version - 1][ec as usize].0.0);
-        println!("stream: {:02X?}", final_bytes);
-        let stream: Vec<bool> = bitstream::Bitstream::from_bytes(&final_bytes).into();
+        let stream: Vec<bool> = bitstream::Bitstream::from_bytes(&encoded).into();
 
         // draw qr code
         let mut qr = Self::make_blank(version, ec);
@@ -130,6 +128,9 @@ pub fn make_fixed_patterns(version: usize) -> Option<Vec<Vec<bool>>> {
     // draw that one module
     res[max - 8][8] = true;
 
+    // draw the version patterns
+    draw_version(&mut res, version);
+
     Some(res)
 }
 
@@ -158,6 +159,121 @@ pub fn draw_alignment(data: &mut [Vec<bool>], pos: (usize, usize)) {
     draw_square(data, true, (pos.0 - 2, pos.1 - 2), (pos.0 + 2, pos.1 + 2));
     draw_square(data, false, (pos.0 - 1, pos.1 - 1), (pos.0 + 1, pos.1 + 1));
     data[pos.0][pos.1] = true;
+}
+
+fn draw_number(data: &mut [Vec<bool>], num: usize, coords: &[(usize, usize)]) {
+    if coords.len() == 18 {
+        println!("{:18b}", num);
+    }
+    for (i, pos) in coords.iter().enumerate() {
+        data[pos.0][pos.1] = (num >> (coords.len() - i - 1)) & 1 == 1;
+    }
+}
+
+fn draw_format(qr: &mut Qr, mask: usize) {
+    let form = rsec::qr_format_encode_masked(((qr.ec as usize) << 3) | mask);
+    let max = version_to_width(qr.version).unwrap() - 1;
+
+    draw_number(
+        &mut qr.data,
+        form,
+        &[
+            (8, 0),
+            (8, 1),
+            (8, 2),
+            (8, 3),
+            (8, 4),
+            (8, 5),
+            (8, 7),
+            (8, 8),
+            (7, 8),
+            (5, 8),
+            (4, 8),
+            (3, 8),
+            (2, 8),
+            (1, 8),
+            (0, 8),
+        ],
+    );
+    draw_number(
+        &mut qr.data,
+        form,
+        &[
+            (max, 8),
+            (max - 1, 8),
+            (max - 2, 8),
+            (max - 3, 8),
+            (max - 4, 8),
+            (max - 5, 8),
+            (max - 6, 8),
+            (8, max - 7),
+            (8, max - 6),
+            (8, max - 5),
+            (8, max - 4),
+            (8, max - 3),
+            (8, max - 2),
+            (8, max - 1),
+            (8, max),
+        ],
+    );
+}
+
+pub fn draw_version(data: &mut [Vec<bool>], version: usize) {
+    if !(7..=40).contains(&version) {
+        return;
+    }
+    let max = version_to_width(version).unwrap();
+    let ver = VERSION_INFO[version - 1];
+
+    draw_number(
+        data,
+        ver,
+        &[
+            (max - 9, 5),
+            (max - 10, 5),
+            (max - 11, 5),
+            (max - 9, 4),
+            (max - 10, 4),
+            (max - 11, 4),
+            (max - 9, 3),
+            (max - 10, 3),
+            (max - 11, 3),
+            (max - 9, 2),
+            (max - 10, 2),
+            (max - 11, 2),
+            (max - 9, 1),
+            (max - 10, 1),
+            (max - 11, 1),
+            (max - 9, 0),
+            (max - 10, 0),
+            (max - 11, 0),
+        ],
+    );
+
+    draw_number(
+        data,
+        ver,
+        &[
+            (5, max - 9),
+            (5, max - 10),
+            (5, max - 11),
+            (4, max - 9),
+            (4, max - 10),
+            (4, max - 11),
+            (3, max - 9),
+            (3, max - 10),
+            (3, max - 11),
+            (2, max - 9),
+            (2, max - 10),
+            (2, max - 11),
+            (1, max - 9),
+            (1, max - 10),
+            (1, max - 11),
+            (0, max - 9),
+            (0, max - 10),
+            (0, max - 11),
+        ],
+    );
 }
 
 pub fn is_alignment_pattern(version: usize, pos: (usize, usize)) -> bool {
@@ -321,6 +437,26 @@ impl Iterator for ModuleOrder {
     }
 }
 
+fn apply_best_mask(qr: &Qr) -> Qr {
+    let choices = (0..=7).map(|n| apply_mask(qr, n));
+    let res = choices.min_by_key(Qr::score).unwrap();
+    println!("score: {}", res.score());
+    res
+}
+
+fn apply_mask(qr: &Qr, mask: usize) -> Qr {
+    let mut res = qr.clone();
+    draw_format(&mut res, mask);
+    for (i, row) in res.data.iter_mut().enumerate() {
+        for (j, module) in row.iter_mut().enumerate() {
+            if is_data_module(qr.version, (i, j)) {
+                *module = *module != MASKS[mask]((i, j));
+            }
+        }
+    }
+    res
+}
+
 fn score_matrix(data: &[Vec<bool>]) -> usize {
     // calculate horizontal adjacency score
     let mut h_adj = 0;
@@ -439,63 +575,6 @@ fn score_matrix(data: &[Vec<bool>]) -> usize {
     let proportion = 10 * ((10.0 - (20.0 * percentage)).abs().round() as usize);
 
     h_adj + v_adj + block + h_finder + v_finder + proportion
-}
-
-fn apply_best_mask(qr: &Qr) -> Qr {
-    let choices = (0..=7).map(|n| apply_mask(qr, n));
-    let res = choices.min_by_key(Qr::score).unwrap();
-    println!("score: {}", res.score());
-    res
-}
-
-fn apply_mask(qr: &Qr, mask: usize) -> Qr {
-    let mut res = qr.clone();
-    write_format(&mut res, mask);
-    for (i, row) in res.data.iter_mut().enumerate() {
-        for (j, module) in row.iter_mut().enumerate() {
-            if is_data_module(qr.version, (i, j)) {
-                *module = *module != MASKS[mask]((i, j));
-            }
-        }
-    }
-    res
-}
-
-fn write_format(qr: &mut Qr, mask: usize) {
-    let form = rsec::qr_format_encode_masked(((qr.ec as usize) << 3) | mask);
-    let max = version_to_width(qr.version).unwrap() - 1;
-    //i'm just unrolling this it's probably faster anways
-    qr.data[8][0] = (form >> 14) & 1 == 1;
-    qr.data[8][1] = (form >> 13) & 1 == 1;
-    qr.data[8][2] = (form >> 12) & 1 == 1;
-    qr.data[8][3] = (form >> 11) & 1 == 1;
-    qr.data[8][4] = (form >> 10) & 1 == 1;
-    qr.data[8][5] = (form >> 9) & 1 == 1;
-    qr.data[8][7] = (form >> 8) & 1 == 1;
-    qr.data[8][8] = (form >> 7) & 1 == 1;
-    qr.data[7][8] = (form >> 6) & 1 == 1;
-    qr.data[5][8] = (form >> 5) & 1 == 1;
-    qr.data[4][8] = (form >> 4) & 1 == 1;
-    qr.data[3][8] = (form >> 3) & 1 == 1;
-    qr.data[2][8] = (form >> 2) & 1 == 1;
-    qr.data[1][8] = (form >> 1) & 1 == 1;
-    qr.data[0][8] = form & 1 == 1;
-
-    qr.data[max][8] = (form >> 14) & 1 == 1;
-    qr.data[max - 1][8] = (form >> 13) & 1 == 1;
-    qr.data[max - 2][8] = (form >> 12) & 1 == 1;
-    qr.data[max - 3][8] = (form >> 11) & 1 == 1;
-    qr.data[max - 4][8] = (form >> 10) & 1 == 1;
-    qr.data[max - 5][8] = (form >> 9) & 1 == 1;
-    qr.data[max - 6][8] = (form >> 8) & 1 == 1;
-    qr.data[8][max - 7] = (form >> 7) & 1 == 1;
-    qr.data[8][max - 6] = (form >> 6) & 1 == 1;
-    qr.data[8][max - 5] = (form >> 5) & 1 == 1;
-    qr.data[8][max - 4] = (form >> 4) & 1 == 1;
-    qr.data[8][max - 3] = (form >> 3) & 1 == 1;
-    qr.data[8][max - 2] = (form >> 2) & 1 == 1;
-    qr.data[8][max - 1] = (form >> 1) & 1 == 1;
-    qr.data[8][max] = form & 1 == 1;
 }
 
 #[cfg(test)]
