@@ -1,3 +1,4 @@
+// lookup table for galois field exponentiation
 pub const GF_EXP: [u8; 256] = [
     1, 2, 4, 8, 16, 32, 64, 128, 29, 58, 116, 232, 205, 135, 19, 38, 76, 152, 45, 90, 180, 117,
     234, 201, 143, 3, 6, 12, 24, 48, 96, 192, 157, 39, 78, 156, 37, 74, 148, 53, 106, 212, 181,
@@ -14,6 +15,7 @@ pub const GF_EXP: [u8; 256] = [
     131, 27, 54, 108, 216, 173, 71, 142, 0,
 ];
 
+// lookup table for galois field logarithms
 // this is usize because it's mostly used for indexing
 pub const GF_LOG: [usize; 256] = [
     0, 0, 1, 25, 2, 50, 26, 198, 3, 223, 51, 238, 27, 104, 199, 75, 4, 100, 224, 14, 52, 141, 239,

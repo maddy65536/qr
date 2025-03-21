@@ -15,6 +15,16 @@ const MASKS: [fn((usize, usize)) -> bool; 8] = [
     |p| ((p.0 + p.1) % 2 + (p.0 * p.1) % 3) % 2 == 0,
 ];
 
+const FINDER_LIKE_LEN: usize = 11;
+const FINDER_LIKE: [[bool; FINDER_LIKE_LEN]; 2] = [
+    [
+        true, false, true, true, true, false, true, false, false, false, false,
+    ],
+    [
+        false, false, false, false, true, false, true, true, true, false, true,
+    ],
+];
+
 #[derive(Debug, Clone)]
 pub struct Qr {
     pub data: Vec<Vec<bool>>,
@@ -58,62 +68,10 @@ impl Qr {
         qr = apply_best_mask(&qr);
         Some(qr)
     }
-}
 
-fn apply_best_mask(qr: &Qr) -> Qr {
-    let mut choices = (0..=7).map(|n| apply_mask(qr, n));
-    choices.nth(0).unwrap()
-}
-
-fn apply_mask(qr: &Qr, mask: usize) -> Qr {
-    let mut res = qr.clone();
-    write_format(&mut res, mask);
-    for (i, row) in res.data.iter_mut().enumerate() {
-        for (j, module) in row.iter_mut().enumerate() {
-            if is_data_module(qr.version, (i, j)) {
-                *module = *module != MASKS[mask]((i, j));
-            }
-        }
+    pub fn score(&self) -> usize {
+        score_matrix(&self.data)
     }
-    res
-}
-
-fn write_format(qr: &mut Qr, mask: usize) {
-    let form = rsec::qr_format_encode_masked(((qr.ec as usize) << 3) | mask);
-    println!("{:#15b}", form);
-    let max = version_to_width(qr.version).unwrap() - 1;
-    //i'm just unrolling this it's probably faster anways
-    qr.data[8][0] = (form >> 14) & 1 == 1;
-    qr.data[8][1] = (form >> 13) & 1 == 1;
-    qr.data[8][2] = (form >> 12) & 1 == 1;
-    qr.data[8][3] = (form >> 11) & 1 == 1;
-    qr.data[8][4] = (form >> 10) & 1 == 1;
-    qr.data[8][5] = (form >> 9) & 1 == 1;
-    qr.data[8][7] = (form >> 8) & 1 == 1;
-    qr.data[8][8] = (form >> 7) & 1 == 1;
-    qr.data[7][8] = (form >> 6) & 1 == 1;
-    qr.data[5][8] = (form >> 5) & 1 == 1;
-    qr.data[4][8] = (form >> 4) & 1 == 1;
-    qr.data[3][8] = (form >> 3) & 1 == 1;
-    qr.data[2][8] = (form >> 2) & 1 == 1;
-    qr.data[1][8] = (form >> 1) & 1 == 1;
-    qr.data[0][8] = form & 1 == 1;
-
-    qr.data[max][8] = (form >> 14) & 1 == 1;
-    qr.data[max - 1][8] = (form >> 13) & 1 == 1;
-    qr.data[max - 2][8] = (form >> 12) & 1 == 1;
-    qr.data[max - 3][8] = (form >> 11) & 1 == 1;
-    qr.data[max - 4][8] = (form >> 10) & 1 == 1;
-    qr.data[max - 5][8] = (form >> 9) & 1 == 1;
-    qr.data[max - 6][8] = (form >> 8) & 1 == 1;
-    qr.data[8][max - 7] = (form >> 7) & 1 == 1;
-    qr.data[8][max - 6] = (form >> 6) & 1 == 1;
-    qr.data[8][max - 5] = (form >> 5) & 1 == 1;
-    qr.data[8][max - 4] = (form >> 4) & 1 == 1;
-    qr.data[8][max - 3] = (form >> 3) & 1 == 1;
-    qr.data[8][max - 2] = (form >> 2) & 1 == 1;
-    qr.data[8][max - 1] = (form >> 1) & 1 == 1;
-    qr.data[8][max] = form & 1 == 1;
 }
 
 pub fn version_to_width(version: usize) -> Option<usize> {
@@ -234,6 +192,7 @@ pub enum ModuleType {
     Data,
 }
 
+/// i thought this would be useful but it hasn't been so far, maybe there will be a use?
 pub fn module_type(version: usize, pos: (usize, usize)) -> ModuleType {
     // just kinda give up on invalid ones sorry
     if !(1..=40).contains(&version) {
@@ -340,6 +299,7 @@ impl Iterator for ModuleOrder {
                     (curr.1 / 2) & 1 == 1
                 };
 
+                // if at the end of a row move to the next one otherwise keep going
                 if (up && curr.0 == 0) || (!up && curr.0 == max) {
                     curr = (curr.0, curr.1 - 1);
                 } else if up {
@@ -359,6 +319,183 @@ impl Iterator for ModuleOrder {
             }
         }
     }
+}
+
+fn score_matrix(data: &[Vec<bool>]) -> usize {
+    // calculate horizontal adjacency score
+    let mut h_adj = 0;
+    for r in data.iter() {
+        let mut curr = false;
+        let mut count = 0;
+        for m in r.iter() {
+            if *m != curr {
+                curr = *m;
+                if count >= 5 {
+                    h_adj += count - 2;
+                }
+                count = 1;
+            } else {
+                count += 1;
+            }
+        }
+        // take care of end of row
+        if count >= 5 {
+            h_adj += count - 2;
+        }
+    }
+
+    // calculate vertical adjacency score
+    let mut v_adj = 0;
+    for c in 0..data[0].len() {
+        let mut curr = false;
+        let mut count = 0;
+        for r in data.iter() {
+            if r[c] != curr {
+                curr = r[c];
+                if count >= 5 {
+                    v_adj += count - 2;
+                }
+                count = 1;
+            } else {
+                count += 1;
+            }
+        }
+        // take care of end of column
+        if count >= 5 {
+            v_adj += count - 2;
+        }
+    }
+
+    // calculate block score
+    let mut block = 0;
+    for (i, r) in data[..data.len() - 1].iter().enumerate() {
+        for (j, m) in r[..r.len() - 1].iter().enumerate() {
+            if (*m && data[i + 1][j] && data[i][j + 1] && data[i + 1][j + 1])
+                || (!*m && !data[i + 1][j] && !data[i][j + 1] && !data[i + 1][j + 1])
+            {
+                block += 3;
+            }
+        }
+    }
+
+    let mut h_finder = 0;
+    for r in data.iter() {
+        for i in 0..(r.len() - FINDER_LIKE_LEN + 1) {
+            let mut found = true;
+            for (j, pat) in FINDER_LIKE[0].iter().enumerate() {
+                if r[i + j] != *pat {
+                    found = false;
+                    break;
+                }
+            }
+            if found {
+                h_finder += 40;
+            }
+
+            found = true;
+            for (j, pat) in FINDER_LIKE[1].iter().enumerate() {
+                if r[i + j] != *pat {
+                    found = false;
+                    break;
+                }
+            }
+            if found {
+                h_finder += 40;
+            }
+        }
+    }
+
+    let mut v_finder = 0;
+    for c in 0..data[0].len() {
+        for i in 0..(data.len() - FINDER_LIKE_LEN + 1) {
+            let mut found = true;
+            for (j, pat) in FINDER_LIKE[0].iter().enumerate() {
+                if data[i + j][c] != *pat {
+                    found = false;
+                    break;
+                }
+            }
+            if found {
+                v_finder += 40;
+            }
+
+            found = true;
+            for (j, pat) in FINDER_LIKE[1].iter().enumerate() {
+                if data[i + j][c] != *pat {
+                    found = false;
+                    break;
+                }
+            }
+            if found {
+                v_finder += 40;
+            }
+        }
+    }
+
+    // calculate proportion score
+    let num_mod: usize = data.iter().map(|r| r.len()).sum();
+    let num_dark: usize = data.iter().map(|r| r.iter().filter(|m| **m).count()).sum();
+    let percentage: f32 = (num_dark as f32) / (num_mod as f32);
+    let proportion = 10 * ((10.0 - (20.0 * percentage)).abs().round() as usize);
+
+    h_adj + v_adj + block + h_finder + v_finder + proportion
+}
+
+fn apply_best_mask(qr: &Qr) -> Qr {
+    let choices = (0..=7).map(|n| apply_mask(qr, n));
+    let res = choices.min_by_key(Qr::score).unwrap();
+    println!("score: {}", res.score());
+    res
+}
+
+fn apply_mask(qr: &Qr, mask: usize) -> Qr {
+    let mut res = qr.clone();
+    write_format(&mut res, mask);
+    for (i, row) in res.data.iter_mut().enumerate() {
+        for (j, module) in row.iter_mut().enumerate() {
+            if is_data_module(qr.version, (i, j)) {
+                *module = *module != MASKS[mask]((i, j));
+            }
+        }
+    }
+    res
+}
+
+fn write_format(qr: &mut Qr, mask: usize) {
+    let form = rsec::qr_format_encode_masked(((qr.ec as usize) << 3) | mask);
+    let max = version_to_width(qr.version).unwrap() - 1;
+    //i'm just unrolling this it's probably faster anways
+    qr.data[8][0] = (form >> 14) & 1 == 1;
+    qr.data[8][1] = (form >> 13) & 1 == 1;
+    qr.data[8][2] = (form >> 12) & 1 == 1;
+    qr.data[8][3] = (form >> 11) & 1 == 1;
+    qr.data[8][4] = (form >> 10) & 1 == 1;
+    qr.data[8][5] = (form >> 9) & 1 == 1;
+    qr.data[8][7] = (form >> 8) & 1 == 1;
+    qr.data[8][8] = (form >> 7) & 1 == 1;
+    qr.data[7][8] = (form >> 6) & 1 == 1;
+    qr.data[5][8] = (form >> 5) & 1 == 1;
+    qr.data[4][8] = (form >> 4) & 1 == 1;
+    qr.data[3][8] = (form >> 3) & 1 == 1;
+    qr.data[2][8] = (form >> 2) & 1 == 1;
+    qr.data[1][8] = (form >> 1) & 1 == 1;
+    qr.data[0][8] = form & 1 == 1;
+
+    qr.data[max][8] = (form >> 14) & 1 == 1;
+    qr.data[max - 1][8] = (form >> 13) & 1 == 1;
+    qr.data[max - 2][8] = (form >> 12) & 1 == 1;
+    qr.data[max - 3][8] = (form >> 11) & 1 == 1;
+    qr.data[max - 4][8] = (form >> 10) & 1 == 1;
+    qr.data[max - 5][8] = (form >> 9) & 1 == 1;
+    qr.data[max - 6][8] = (form >> 8) & 1 == 1;
+    qr.data[8][max - 7] = (form >> 7) & 1 == 1;
+    qr.data[8][max - 6] = (form >> 6) & 1 == 1;
+    qr.data[8][max - 5] = (form >> 5) & 1 == 1;
+    qr.data[8][max - 4] = (form >> 4) & 1 == 1;
+    qr.data[8][max - 3] = (form >> 3) & 1 == 1;
+    qr.data[8][max - 2] = (form >> 2) & 1 == 1;
+    qr.data[8][max - 1] = (form >> 1) & 1 == 1;
+    qr.data[8][max] = form & 1 == 1;
 }
 
 #[cfg(test)]

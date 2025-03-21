@@ -4,13 +4,14 @@ use crate::tables::{GF_EXP, GF_LOG};
 const QR_FORMAT_GENERATOR: usize = 0x537;
 const QR_FORMAT_MASK: usize = 0b101010000010010;
 
-pub fn gf_add(x: u8, y: u8) -> u8 {
-    x ^ y
-}
+// // turns out i didn't need this
+// pub fn gf_add(x: u8, y: u8) -> u8 {
+//     x ^ y
+// }
 
-pub fn gf_sub(x: u8, y: u8) -> u8 {
-    x ^ y
-}
+// pub fn gf_sub(x: u8, y: u8) -> u8 {
+//     x ^ y
+// }
 
 pub fn gf_mul(x: u8, y: u8) -> u8 {
     if x == 0 || y == 0 {
@@ -20,15 +21,16 @@ pub fn gf_mul(x: u8, y: u8) -> u8 {
     }
 }
 
-pub fn gf_div(x: u8, y: u8) -> u8 {
-    if x == 0 {
-        0
-    } else if y == 0 {
-        panic!("attempt to divide by zero")
-    } else {
-        GF_EXP[(GF_LOG[x as usize] + 255 - GF_LOG[y as usize]) % 255]
-    }
-}
+// // also didn't need this!
+// pub fn gf_div(x: u8, y: u8) -> u8 {
+//     if x == 0 {
+//         0
+//     } else if y == 0 {
+//         panic!("attempt to divide by zero")
+//     } else {
+//         GF_EXP[(GF_LOG[x as usize] + 255 - GF_LOG[y as usize]) % 255]
+//     }
+// }
 
 pub fn poly_mul(x: &[u8], y: &[u8]) -> Vec<u8> {
     let mut res = vec![0u8; x.len() + y.len() - 1];
@@ -92,7 +94,7 @@ pub fn qr_format_encode(fmt: usize) -> usize {
     if fmt > 0b11111 {
         panic!("tried to encode invalid format!")
     }
-    ((fmt as usize) << 10) | qr_format_check((fmt as usize) << 10)
+    (fmt << 10) | qr_format_check(fmt << 10)
 }
 
 pub fn qr_format_encode_masked(fmt: usize) -> usize {
@@ -103,12 +105,12 @@ pub fn qr_format_encode_masked(fmt: usize) -> usize {
 mod tests {
     use super::*;
 
-    // i don't really need a test for this but it's here for completeness
-    #[test]
-    fn test_gf_add_sub() {
-        assert_eq!(gf_add(0b0101, 0b0110), 0b011);
-        assert_eq!(gf_sub(0b0101, 0b0110), 0b011);
-    }
+    // // i don't really need a test for this but it's here for completeness
+    // #[test]
+    // fn test_gf_add_sub() {
+    //     assert_eq!(gf_add(0b0101, 0b0110), 0b011);
+    //     assert_eq!(gf_sub(0b0101, 0b0110), 0b011);
+    // }
 
     #[test]
     fn test_gf_mul() {
@@ -117,17 +119,17 @@ mod tests {
         assert_eq!(gf_mul(0b10001001, 0b00101010), 0b11000011);
     }
 
-    #[test]
-    fn test_gf_div() {
-        assert_eq!(gf_div(0, 0b00101010), 0);
-        assert_eq!(gf_div(0b10001001, 0b00101010), 0b11011100);
-    }
+    // #[test]
+    // fn test_gf_div() {
+    //     assert_eq!(gf_div(0, 0b00101010), 0);
+    //     assert_eq!(gf_div(0b10001001, 0b00101010), 0b11011100);
+    // }
 
-    #[test]
-    #[should_panic]
-    fn test_gf_div_zero() {
-        let _ = gf_div(0b10001001, 0);
-    }
+    // #[test]
+    // #[should_panic]
+    // fn test_gf_div_zero() {
+    //     let _ = gf_div(0b10001001, 0);
+    // }
 
     #[test]
     fn test_poly_mul() {
