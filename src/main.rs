@@ -43,11 +43,10 @@ fn parse_args(args: Vec<String>) -> Result<Options, String> {
     while let Some(option) = args_iter.next() {
         match option.as_str() {
             "--ec" | "-e" => {
-                options.ec = match args_iter
-                    .next()
-                    .expect("--ec [low|medium|quartile|high]")
-                    .as_str()
-                {
+                let Some(ec) = args_iter.next() else {
+                    return Err("--ec [low|medium|quartile|high]".into());
+                };
+                options.ec = match ec.as_str() {
                     "low" => Some(ECLevel::Low),
                     "medium" => Some(ECLevel::Medium),
                     "quartile" => Some(ECLevel::Quartile),
@@ -58,26 +57,28 @@ fn parse_args(args: Vec<String>) -> Result<Options, String> {
                 }
             }
             "--mask" | "-m" => {
-                let m = args_iter
-                    .next()
-                    .expect("--mask [0-7]")
-                    .parse()
-                    .expect("mask must be a number 0-7");
-                if !(0..=7).contains(&m) {
+                let Some(mask_arg) = args_iter.next() else {
+                    return Err("--mask [0-7]".into());
+                };
+                let Ok(mask) = mask_arg.parse() else {
+                    return Err("mask must be a number 0-7".into());
+                };
+                if !(0..=7).contains(&mask) {
                     return Err("mask must be a number 0-7".into());
                 }
-                options.mask = Some(m)
+                options.mask = Some(mask)
             }
             "--min-version" | "-v" => {
-                let m = args_iter
-                    .next()
-                    .expect("--min-version [1-40]")
-                    .parse()
-                    .expect("min-version must be a number 1-40");
-                if !(1..=40).contains(&m) {
+                let Some(version_arg) = args_iter.next() else {
+                    return Err("--min-version [1-40]".into());
+                };
+                let Ok(version) = version_arg.parse() else {
+                    return Err("min-version must be a number 1-40".into());
+                };
+                if !(1..=40).contains(&version) {
                     return Err("min-version must be a number 1-40".into());
                 }
-                options.min_version = Some(m)
+                options.min_version = Some(version)
             }
             "--output" | "-o" => options.path = args_iter.next().expect("--output (path)").clone(),
             _ => {
