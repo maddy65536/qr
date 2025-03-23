@@ -3,7 +3,7 @@ use std::collections::VecDeque;
 use crate::{
     bitstream::Bitstream,
     rsec,
-    tables::{BLOCK_GROUPS, DATA_CAPACITY, LENGTH_BITS},
+    tables::{ALPHANUMERIC_ORDER, BLOCK_GROUPS, DATA_CAPACITY, LENGTH_BITS},
 };
 
 // ignoring structured apend for now
@@ -13,7 +13,6 @@ pub enum Mode {
     Alphanumeric = 0b0010,
     Byte = 0b0100,
     Kanji = 0b1000,
-    Eci = 0b0111,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -26,20 +25,21 @@ pub enum ECLevel {
 
 // should add kanji mode and potentially support for mixing modes
 pub fn detect_mode(data: &str) -> Mode {
-    Mode::Byte
+    if is_numeric(data) {
+        Mode::Numeric
+    } else if is_alphanumeric(data) {
+        Mode::Alphanumeric
+    } else {
+        Mode::Byte
+    }
+}
 
-    // if data.chars().all(|c| c.is_ascii() && c.is_numeric()) {
-    //     Mode::Numeric
-    // } else if data
-    //     .chars()
-    //     .all(|c| c.is_ascii() && (c.is_uppercase() || c.is_numeric()))
-    // {
-    //     Mode::Alphanumeric
-    // } else if data.is_ascii() {
-    //     Mode::Byte
-    // } else {
-    //     Mode::Eci
-    // }
+fn is_numeric(data: &str) -> bool {
+    data.chars().all(|c| c.is_ascii() && c.is_numeric())
+}
+
+fn is_alphanumeric(data: &str) -> bool {
+    data.chars().all(|c| ALPHANUMERIC_ORDER.contains(&c))
 }
 
 pub fn get_length_bits(mode: Mode, version: usize) -> Option<usize> {
@@ -52,11 +52,23 @@ pub fn get_length_bits(mode: Mode, version: usize) -> Option<usize> {
     Some(LENGTH_BITS[(mode as u32).ilog2() as usize][index])
 }
 
+pub fn data_len(mode: Mode, len: usize) -> usize {
+    match mode {
+        Mode::Numeric => {
+            (len / 3) * 10 + ((len % 3 == 1) as usize) * 4 + ((len % 3 == 2) as usize) * 7
+        }
+        Mode::Alphanumeric => ((len / 2) * 11) + ((len & 1) * 6),
+        Mode::Byte => len * 8,
+        Mode::Kanji => unimplemented!(),
+    }
+}
+
 // find smallest version that fits data
 pub fn detect_version(mode: Mode, len: usize, ec: ECLevel) -> Option<usize> {
     for (v, row) in DATA_CAPACITY.iter().enumerate() {
         let capacity = row[ec as usize] * 8;
-        let size = get_length_bits(mode, v + 1)? + (len * 8);
+        // 8 extra bits for mode selector + terminator
+        let size = (8 + get_length_bits(mode, v + 1)? + len).next_multiple_of(8);
         if size <= capacity {
             return Some(v + 1);
         }
@@ -64,11 +76,11 @@ pub fn detect_version(mode: Mode, len: usize, ec: ECLevel) -> Option<usize> {
     None
 }
 
-pub fn encode(data: String, mode: Mode, version: usize, ec: ECLevel) -> Option<Vec<u8>> {
-    if mode != Mode::Byte {
-        todo!("i'll get to it")
-    }
+fn char_to_alphanum(data: char) -> u16 {
+    ALPHANUMERIC_ORDER.iter().position(|c| *c == data).unwrap() as u16
+}
 
+pub fn encode(data: &str, mode: Mode, version: usize, ec: ECLevel) -> Option<Vec<u8>> {
     let num_codewords = DATA_CAPACITY[version - 1][ec as usize];
     println!("num codewords: {}", num_codewords);
 
@@ -80,9 +92,39 @@ pub fn encode(data: String, mode: Mode, version: usize, ec: ECLevel) -> Option<V
     // length indicator
     res.push_u16(data.len() as u16, get_length_bits(mode, version)?);
 
-    // just handling byte mode for now
-    for b in data.as_bytes() {
-        res.push_u8(*b, 8);
+    match mode {
+        Mode::Numeric => {
+            let mut chars = data.chars().peekable();
+            while chars.peek().is_some() {
+                let chunk: String = chars.by_ref().take(3).collect();
+                let len = if chunk.len() == 1 {
+                    4
+                } else if chunk.len() == 2 {
+                    7
+                } else {
+                    10
+                };
+                res.push_u16(chunk.parse().unwrap(), len);
+            }
+        }
+        Mode::Alphanumeric => {
+            let mut chars = data.chars().peekable();
+            while chars.peek().is_some() {
+                let chunk: Vec<char> = chars.by_ref().take(2).collect();
+                if chunk.len() == 1 {
+                    res.push_u16(char_to_alphanum(chunk[0]), 6);
+                } else {
+                    let code = (45 * char_to_alphanum(chunk[0])) + char_to_alphanum(chunk[1]);
+                    res.push_u16(code, 11);
+                }
+            }
+        }
+        Mode::Byte => {
+            for b in data.as_bytes() {
+                res.push_u8(*b, 8);
+            }
+        }
+        Mode::Kanji => unimplemented!(),
     }
 
     res.push_u8(0, 4); // insert terminator
@@ -98,10 +140,6 @@ pub fn encode(data: String, mode: Mode, version: usize, ec: ECLevel) -> Option<V
 
     let res_bytes = res.as_bytes();
     Some(interleave_and_ec(&res_bytes, version, ec))
-    // Some(rsec::rs_encode(
-    //     &res_bytes,
-    //     BLOCK_GROUPS[version - 1][ec as usize].0.0,
-    // ))
 }
 
 fn interleave_and_ec(bytes: &[u8], version: usize, ec: ECLevel) -> Vec<u8> {
@@ -130,8 +168,6 @@ fn interleave_and_ec(bytes: &[u8], version: usize, ec: ECLevel) -> Vec<u8> {
             ec_groups.push(ec_group.into());
         }
     }
-
-    println!("len: {}\n{:#02x?}", ec_groups[0].len(), ec_groups);
 
     // build result
     let mut finished = false;
@@ -168,8 +204,8 @@ mod tests {
         assert_eq!(detect_mode("123456"), Mode::Numeric);
         assert_eq!(detect_mode("123456ABC"), Mode::Alphanumeric);
         assert_eq!(detect_mode("123456ABCabc'!%&"), Mode::Byte);
-        assert_eq!(detect_mode("123456ABCDEFabcdef'!%&¥"), Mode::Eci);
-        assert_eq!(detect_mode("一二三四五六七八九十"), Mode::Eci);
+        assert_eq!(detect_mode("123456ABCDEFabcdef'!%&¥"), Mode::Byte);
+        assert_eq!(detect_mode("一二三四五六七八九十"), Mode::Byte);
     }
 
     #[test]
@@ -177,8 +213,17 @@ mod tests {
         assert_eq!(get_length_bits(Mode::Numeric, 1), Some(10));
         assert_eq!(get_length_bits(Mode::Alphanumeric, 15), Some(11));
         assert_eq!(get_length_bits(Mode::Byte, 29), Some(16));
-        assert_eq!(get_length_bits(Mode::Eci, 2), Some(8));
         assert_eq!(get_length_bits(Mode::Kanji, 14), Some(10));
+    }
+
+    #[test]
+    fn test_data_len() {
+        assert_eq!(data_len(Mode::Byte, 4), 32);
+        assert_eq!(data_len(Mode::Numeric, 6), 20);
+        assert_eq!(data_len(Mode::Numeric, 7), 24);
+        assert_eq!(data_len(Mode::Numeric, 8), 27);
+        assert_eq!(data_len(Mode::Alphanumeric, 4), 22);
+        assert_eq!(data_len(Mode::Alphanumeric, 5), 28);
     }
 
     #[test]

@@ -33,6 +33,13 @@ pub const GF_LOG: [usize; 256] = [
     214, 244, 234, 168, 80, 88, 175,
 ];
 
+// i'd prefer to use like, a static map for this but i don't wanna pull in a crate so this is what's happening
+pub const ALPHANUMERIC_ORDER: [char; 45] = [
+    '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I',
+    'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', ' ', '$',
+    '%', '*', '+', '-', '.', '/', ':',
+];
+
 pub const VERSION_INFO: [usize; 40] = [
     0x00000, 0x00000, 0x00000, 0x00000, 0x00000, 0x00000, 0x07c94, 0x085bc, 0x09a99, 0x0a4d3,
     0x0bbf6, 0x0c762, 0x0d847, 0x0e60d, 0x0f928, 0x10b78, 0x1145d, 0x12a17, 0x13532, 0x149a6,
@@ -42,9 +49,9 @@ pub const VERSION_INFO: [usize; 40] = [
 
 // ordered by bit length of number
 pub const LENGTH_BITS: [[usize; 3]; 4] = [
-    [10, 12, 14], // numberic    0b0001
+    [10, 12, 14], // numeric    0b0001
     [9, 11, 13],  // alphanumeric 0b0010
-    [8, 16, 16],  // byte/eci     0b0100/0b0111
+    [8, 16, 16],  // byte     0b0100
     [8, 10, 12],  // kanji        0b1000
 ];
 

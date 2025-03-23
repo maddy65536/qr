@@ -73,7 +73,7 @@ impl Bitstream {
 
     /// how many bits free in current byte
     pub fn free_bits(&self) -> usize {
-        self.data.len() % 8
+        self.data.len().next_multiple_of(8) - self.data.len()
     }
 }
 

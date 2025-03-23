@@ -1,7 +1,7 @@
 use std::iter;
 
 use crate::encoding::{self, ECLevel};
-use crate::tables::{ALIGNMENT_PATTERNS, BLOCK_GROUPS, VERSION_INFO};
+use crate::tables::{ALIGNMENT_PATTERNS, VERSION_INFO};
 use crate::{bitstream, rsec};
 
 const MASKS: [fn((usize, usize)) -> bool; 8] = [
@@ -49,9 +49,10 @@ impl Qr {
         let mode = encoding::detect_mode(data);
         println!("mode: {:?}", mode);
         // need a better length calculation for the other modes but it works for now
-        let version = encoding::detect_version(mode, data.len(), ec)?;
+        let version = encoding::detect_version(mode, encoding::data_len(mode, data.len()), ec)
+            .expect("too much data");
         println!("version: {:?}", version);
-        let encoded = encoding::encode(data.into(), mode, version, ec).unwrap();
+        let encoded = encoding::encode(data, mode, version, ec).unwrap();
         println!("encoded: {:02X?} len: {}", encoded, encoded.len());
         let stream: Vec<bool> = bitstream::Bitstream::from_bytes(&encoded).into();
 
@@ -162,9 +163,6 @@ pub fn draw_alignment(data: &mut [Vec<bool>], pos: (usize, usize)) {
 }
 
 fn draw_number(data: &mut [Vec<bool>], num: usize, coords: &[(usize, usize)]) {
-    if coords.len() == 18 {
-        println!("{:18b}", num);
-    }
     for (i, pos) in coords.iter().enumerate() {
         data[pos.0][pos.1] = (num >> (coords.len() - i - 1)) & 1 == 1;
     }
@@ -442,7 +440,7 @@ fn apply_best_mask(qr: &Qr, mask: Option<usize>) -> Qr {
     if let Some(mask_choice) = mask {
         return choices.nth(mask_choice).unwrap();
     }
-    let res = choices.max_by_key(Qr::score).unwrap();
+    let res = choices.min_by_key(Qr::score).unwrap();
     println!("score: {}", res.score());
     res
 }
@@ -517,6 +515,7 @@ fn score_matrix(data: &[Vec<bool>]) -> usize {
         }
     }
 
+    // calculate horizontal finder-like pattern score
     let mut h_finder = 0;
     for r in data.iter() {
         for i in 0..(r.len() - FINDER_LIKE_LEN + 1) {
@@ -544,6 +543,7 @@ fn score_matrix(data: &[Vec<bool>]) -> usize {
         }
     }
 
+    // calculate vertical finder-like pattern score
     let mut v_finder = 0;
     for c in 0..data[0].len() {
         for i in 0..(data.len() - FINDER_LIKE_LEN + 1) {
