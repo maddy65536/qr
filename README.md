@@ -7,7 +7,8 @@ Supports all versions, all error correction levels, and byte, alphanumeric, and 
 Usage: qr "message" [options]
 
 options:
-    --ec [low|medium|quartile|high]
-    --mask [0-7]
-    --min-version [1-40]
+    -e / --ec [low|medium|quartile|high]
+    -m / --mask [0-7]
+    -v / --min-version [1-40]
+    -o / --output (path)
 ```

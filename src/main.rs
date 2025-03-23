@@ -10,9 +10,10 @@ use encoding::ECLevel;
 const HELP_MESSAGE: &str = "Usage: qr \"message\" [options]
 
 options:
-\t--ec [low|medium|quartile|high]
-\t--mask [0-7]
-\t--min-version [1-40]";
+\t-e / --ec [low|medium|quartile|high]
+\t-m / --mask [0-7]
+\t-v / --min-version [1-40]
+\t-o / --output (path)";
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
@@ -26,10 +27,11 @@ fn main() {
     let mut ec = None;
     let mut mask = None;
     let mut min_version = None;
+    let mut path = "output.bmp";
 
     while let Some(option) = args_iter.next() {
         match option.as_str() {
-            "--ec" => {
+            "--ec" | "-e" => {
                 ec = match args_iter
                     .next()
                     .expect("--ec [low|medium|quartile|high]")
@@ -45,7 +47,7 @@ fn main() {
                     }
                 }
             }
-            "--mask" => {
+            "--mask" | "-m" => {
                 let m = args_iter
                     .next()
                     .expect("--mask [0-7]")
@@ -57,7 +59,7 @@ fn main() {
                 }
                 mask = Some(m)
             }
-            "--min-version" => {
+            "--min-version" | "-v" => {
                 let m = args_iter
                     .next()
                     .expect("--min-version [1-40]")
@@ -69,6 +71,7 @@ fn main() {
                 }
                 min_version = Some(m)
             }
+            "--output" | "-o" => path = args_iter.next().expect("--output (path)"),
             _ => {
                 println!("unknown option: {}", option);
                 return;
@@ -78,5 +81,5 @@ fn main() {
 
     let res = qr::Qr::make_qr(message, ec, mask, min_version).unwrap();
     let bmp = bitmap::qr_to_bitmap(&res).unwrap();
-    std::fs::write("test.bmp", bmp).unwrap();
+    std::fs::write(path, bmp).unwrap();
 }
