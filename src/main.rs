@@ -80,7 +80,12 @@ fn parse_args(args: Vec<String>) -> Result<Options, String> {
                 }
                 options.min_version = Some(version)
             }
-            "--output" | "-o" => options.path = args_iter.next().expect("--output (path)").clone(),
+            "--output" | "-o" => {
+                let Some(path) = args_iter.next() else {
+                    return Err("--output (path)".into());
+                };
+                options.path = path.clone()
+            }
             _ => {
                 return Err(format!("unknown option: {}", option));
             }
