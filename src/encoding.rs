@@ -82,7 +82,6 @@ fn char_to_alphanum(data: char) -> u16 {
 
 pub fn encode(data: &str, mode: Mode, version: usize, ec: ECLevel) -> Option<Vec<u8>> {
     let num_codewords = DATA_CAPACITY[version - 1][ec as usize];
-    println!("num codewords: {}", num_codewords);
 
     let mut res = Bitstream::new();
 

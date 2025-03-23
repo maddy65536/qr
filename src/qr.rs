@@ -44,16 +44,25 @@ impl Qr {
         }
     }
 
-    pub fn make_qr(data: &str, ec: ECLevel) -> Option<Self> {
+    pub fn make_qr(
+        data: &str,
+        ec: Option<ECLevel>,
+        mask: Option<usize>,
+        min_version: Option<usize>,
+    ) -> Option<Self> {
+        let ec = ec.unwrap_or(ECLevel::Low);
+        println!("ec level: {:?}", ec);
+        let min_version = min_version.unwrap_or(0);
         // encode data
         let mode = encoding::detect_mode(data);
         println!("mode: {:?}", mode);
         // need a better length calculation for the other modes but it works for now
         let version = encoding::detect_version(mode, encoding::data_len(mode, data.len()), ec)
-            .expect("too much data");
+            .expect("too much data")
+            .max(min_version);
         println!("version: {:?}", version);
         let encoded = encoding::encode(data, mode, version, ec).unwrap();
-        println!("encoded: {:02X?} len: {}", encoded, encoded.len());
+        // println!("encoded: {:02X?} len: {}", encoded, encoded.len());
         let stream: Vec<bool> = bitstream::Bitstream::from_bytes(&encoded).into();
 
         // draw qr code
@@ -64,7 +73,7 @@ impl Qr {
             .zip(order)
             .for_each(|(bit, pos)| qr.data[pos.0][pos.1] = *bit);
 
-        qr = apply_best_mask(&qr, None);
+        qr = apply_best_mask(&qr, mask);
         Some(qr)
     }
 
