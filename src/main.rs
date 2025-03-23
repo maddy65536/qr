@@ -5,11 +5,9 @@ mod qr;
 mod rsec;
 mod tables;
 
-use std::env;
-
 use encoding::ECLevel;
 
-const HELP_MESSAGE: &'static str = "Usage: qr \"message\" [options]
+const HELP_MESSAGE: &str = "Usage: qr \"message\" [options]
 
 options:
 \t--ec [low|medium|quartile|high]

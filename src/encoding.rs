@@ -6,7 +6,7 @@ use crate::{
     tables::{ALPHANUMERIC_ORDER, BLOCK_GROUPS, DATA_CAPACITY, LENGTH_BITS},
 };
 
-// ignoring structured apend for now
+#[allow(unused)]
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum Mode {
     Numeric = 0b0001,
