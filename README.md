@@ -12,3 +12,5 @@ options:
     -v / --min-version [1-40]
     -o / --output (path)
 ```
+
+![qr code containing the text "this qr code was generated using this project!"](./example.png)
