@@ -13,4 +13,4 @@ options:
     -o / --output (path)
 ```
 
-![qr code containing the text "this qr code was generated using this project!"](./example.png)
+![qr code containing the text "this qr code was generated using this project!"](./example.bmp)
