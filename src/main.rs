@@ -15,24 +15,35 @@ options:
 \t-v / --min-version [1-40]
 \t-o / --output (path)";
 
-fn main() {
-    let args: Vec<String> = std::env::args().collect();
+struct Options {
+    message: String,
+    ec: Option<ECLevel>,
+    mask: Option<usize>,
+    min_version: Option<usize>,
+    path: String,
+}
+
+fn parse_args(args: Vec<String>) -> Result<Options, String> {
     if args.len() < 2 {
-        println!("{HELP_MESSAGE}");
-        return;
+        return Err(HELP_MESSAGE.into());
     }
 
     let mut args_iter = args.iter().skip(1);
-    let message = args_iter.next().unwrap();
-    let mut ec = None;
-    let mut mask = None;
-    let mut min_version = None;
-    let mut path = "output.bmp";
+    let Some(message) = args_iter.next() else {
+        return Err("no message supplied".into());
+    };
+    let mut options = Options {
+        message: message.clone(),
+        ec: None,
+        mask: None,
+        min_version: None,
+        path: String::from("output.bmp"),
+    };
 
     while let Some(option) = args_iter.next() {
         match option.as_str() {
             "--ec" | "-e" => {
-                ec = match args_iter
+                options.ec = match args_iter
                     .next()
                     .expect("--ec [low|medium|quartile|high]")
                     .as_str()
@@ -42,8 +53,7 @@ fn main() {
                     "quartile" => Some(ECLevel::Quartile),
                     "high" => Some(ECLevel::High),
                     _ => {
-                        println!("unknown ec level");
-                        return;
+                        return Err("unknown ec level".into());
                     }
                 }
             }
@@ -54,10 +64,9 @@ fn main() {
                     .parse()
                     .expect("mask must be a number 0-7");
                 if !(0..=7).contains(&m) {
-                    println!("mask must be a number 0-7");
-                    return;
+                    return Err("mask must be a number 0-7".into());
                 }
-                mask = Some(m)
+                options.mask = Some(m)
             }
             "--min-version" | "-v" => {
                 let m = args_iter
@@ -66,20 +75,35 @@ fn main() {
                     .parse()
                     .expect("min-version must be a number 1-40");
                 if !(1..=40).contains(&m) {
-                    println!("min-version must be a number 1-40");
-                    return;
+                    return Err("min-version must be a number 1-40".into());
                 }
-                min_version = Some(m)
+                options.min_version = Some(m)
             }
-            "--output" | "-o" => path = args_iter.next().expect("--output (path)"),
+            "--output" | "-o" => options.path = args_iter.next().expect("--output (path)").clone(),
             _ => {
-                println!("unknown option: {}", option);
-                return;
+                return Err(format!("unknown option: {}", option));
             }
         }
     }
 
-    let res = qr::Qr::make_qr(message, ec, mask, min_version).unwrap();
+    Ok(options)
+}
+
+fn main() {
+    let options = match parse_args(std::env::args().collect()) {
+        Ok(options) => options,
+        Err(msg) => {
+            println!("{msg}");
+            return;
+        }
+    };
+    let res = qr::Qr::make_qr(
+        &options.message,
+        options.ec,
+        options.mask,
+        options.min_version,
+    )
+    .unwrap();
     let bmp = bitmap::qr_to_bitmap(&res).unwrap();
-    std::fs::write(path, bmp).unwrap();
+    std::fs::write(options.path, bmp).unwrap();
 }
