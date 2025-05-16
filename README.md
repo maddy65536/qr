@@ -1,5 +1,5 @@
 # qr
-A qr code generator built using only the rust standard library.
+A command line qr code generator.
 
 Supports all versions, all error correction levels, and byte, alphanumeric, and numeric modes.
 

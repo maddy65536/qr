@@ -1,3 +1,5 @@
+use clap::ValueEnum;
+
 use std::collections::VecDeque;
 
 use crate::{
@@ -15,7 +17,7 @@ pub enum Mode {
     Kanji = 0b1000,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, ValueEnum)]
 pub enum ECLevel {
     Low = 0b01,
     Medium = 0b00,
