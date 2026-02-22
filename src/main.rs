@@ -1,13 +1,6 @@
-mod bitmap;
-mod bitstream;
-mod encoding;
-mod qr;
-mod rsec;
-mod tables;
-
 use clap::Parser;
 
-use encoding::ECLevel;
+use qr::{bitmap, encoding::ECLevel, layout};
 
 #[derive(Debug, Parser)]
 struct Args {
@@ -18,7 +11,7 @@ struct Args {
     #[arg(short, long, value_enum)]
     ec: Option<ECLevel>,
 
-    /// Force bitmask [0-7]
+    /// Force mask pattern [0-7]
     #[arg(short, long, value_parser = clap::value_parser!(u64).range(0..=7))]
     mask: Option<u64>,
 
@@ -33,7 +26,7 @@ struct Args {
 
 fn main() {
     let args = Args::parse();
-    let res = qr::Qr::make_qr(
+    let res = layout::Qr::make_qr(
         &args.message,
         args.ec,
         args.mask.map(|x| x as usize),

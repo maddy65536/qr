@@ -591,7 +591,7 @@ fn score_matrix(data: &[Vec<bool>]) -> usize {
 
 #[cfg(test)]
 mod tests {
-    use crate::qr::get_alignment_locations;
+    use crate::layout::get_alignment_locations;
 
     #[test]
     fn test_alignment_locations_v1() {

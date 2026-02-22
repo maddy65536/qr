@@ -1,4 +1,4 @@
-use crate::qr::Qr;
+use crate::layout::Qr;
 use std::iter;
 
 const BMP_HEADER_LEN: usize = 54;
