@@ -1,10 +1,13 @@
 use std::iter;
 
+use crate::embedded_image::EmbeddedImage;
 use crate::encoding::{self, ECLevel};
 use crate::tables::{ALIGNMENT_PATTERNS, VERSION_INFO};
 use crate::{bitstream, rsec};
 
-const MASKS: [fn((usize, usize)) -> bool; 8] = [
+// fixed mask pattern for embedded images
+pub const EMBEDDED_IMAGE_MASK: usize = 7;
+pub const MASKS: [fn((usize, usize)) -> bool; 8] = [
     |p| (p.0 + p.1) % 2 == 0,
     |p| p.0 % 2 == 0,
     |p| p.1 % 3 == 0,
@@ -49,10 +52,17 @@ impl Qr {
         ec: Option<ECLevel>,
         mask: Option<usize>,
         min_version: Option<usize>,
+        image: Option<EmbeddedImage>,
     ) -> Option<Self> {
         let ec = ec.unwrap_or(ECLevel::Low);
         println!("ec level: {:?}", ec);
         let min_version = min_version.unwrap_or(0);
+        // if there's an image to embed use the override mask
+        let mask = if image.is_some() {
+            Some(EMBEDDED_IMAGE_MASK)
+        } else {
+            mask
+        };
         // encode data
         let mode = encoding::detect_mode(data);
         println!("mode: {:?}", mode);
@@ -60,8 +70,7 @@ impl Qr {
             .expect("too much data")
             .max(min_version);
         println!("version: {:?}", version);
-        let encoded = encoding::encode(data, mode, version, ec).unwrap();
-        // println!("encoded: {:02X?} len: {}", encoded, encoded.len());
+        let encoded = encoding::encode(data, mode, version, ec, image).unwrap();
         let stream: Vec<bool> = bitstream::Bitstream::from_bytes(&encoded).into();
 
         // draw qr code

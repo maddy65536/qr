@@ -71,6 +71,10 @@ impl Bitstream {
         self.data.len().div_ceil(8)
     }
 
+    pub fn bit_len(&self) -> usize {
+        self.data.len()
+    }
+
     /// how many bits free in current byte
     pub fn free_bits(&self) -> usize {
         self.data.len().next_multiple_of(8) - self.data.len()
@@ -80,6 +84,12 @@ impl Bitstream {
 impl From<Bitstream> for Vec<bool> {
     fn from(value: Bitstream) -> Self {
         value.data
+    }
+}
+
+impl From<Vec<bool>> for Bitstream {
+    fn from(value: Vec<bool>) -> Self {
+        Self { data: value }
     }
 }
 

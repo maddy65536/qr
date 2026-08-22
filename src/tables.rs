@@ -49,10 +49,10 @@ pub const VERSION_INFO: [usize; 40] = [
 
 // ordered by bit length of number
 pub const LENGTH_BITS: [[usize; 3]; 4] = [
-    [10, 12, 14], // numeric    0b0001
-    [9, 11, 13],  // alphanumeric 0b0010
-    [8, 16, 16],  // byte     0b0100
-    [8, 10, 12],  // kanji        0b1000
+    [10, 12, 14], // numeric       0b0001
+    [9, 11, 13],  // alphanumeric  0b0010
+    [8, 16, 16],  // byte          0b0100
+    [8, 10, 12],  // kanji         0b1000
 ];
 
 pub const ALIGNMENT_PATTERNS: [&[usize]; 40] = [

@@ -4,5 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+anyhow = "1.0.104"
 clap = { version = "4.5.38", features = ["derive"] }
 encoding_rs = { version = "0.8.35", features = ["less-slow-kanji-encode"] }
+image = "0.25.10"

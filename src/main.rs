@@ -24,15 +24,22 @@ struct Args {
     output: String,
 }
 
-fn main() {
+fn main() -> anyhow::Result<()> {
     let args = Args::parse();
     let res = layout::Qr::make_qr(
         &args.message,
         args.ec,
         args.mask.map(|x| x as usize),
         args.version.map(|x| x as usize),
+        Some(qr::embedded_image::EmbeddedImage::from_image(
+            image::ImageReader::open("nowanobw.png")?.decode()?,
+            0,
+            0,
+        )),
     )
     .unwrap();
     let bmp = bitmap::qr_to_bitmap(&res).unwrap();
     std::fs::write(args.output, bmp).unwrap();
+
+    Ok(())
 }

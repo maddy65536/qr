@@ -5,6 +5,8 @@ use std::collections::VecDeque;
 
 use crate::{
     bitstream::Bitstream,
+    embedded_image::EmbeddedImage,
+    layout::{EMBEDDED_IMAGE_MASK, ModuleOrder},
     rsec,
     tables::{ALPHANUMERIC_ORDER, BLOCK_GROUPS, DATA_CAPACITY, LENGTH_BITS},
 };
@@ -26,7 +28,6 @@ pub enum ECLevel {
     High = 0b10,
 }
 
-// should add kanji mode and potentially support for mixing modes
 pub fn detect_mode(data: &str) -> Mode {
     if is_numeric(data) {
         Mode::Numeric
@@ -99,7 +100,13 @@ fn char_to_alphanum(data: char) -> u16 {
     ALPHANUMERIC_ORDER.iter().position(|c| *c == data).unwrap() as u16
 }
 
-pub fn encode(data: &str, mode: Mode, version: usize, ec: ECLevel) -> Option<Vec<u8>> {
+pub fn encode(
+    data: &str,
+    mode: Mode,
+    version: usize,
+    ec: ECLevel,
+    image: Option<EmbeddedImage>,
+) -> Option<Vec<u8>> {
     let num_codewords = DATA_CAPACITY[version - 1][ec as usize];
 
     let mut res = Bitstream::new();
@@ -177,12 +184,29 @@ pub fn encode(data: &str, mode: Mode, version: usize, ec: ECLevel) -> Option<Vec
     res.push_u8(0, 4); // insert terminator
     res.push_u8(0, res.free_bits()); // fill remaining bits in last byte
 
-    // insert padding
-    let padding: Vec<u8> = [0xEC, 0x11]
-        .into_iter()
-        .cycle()
-        .take(num_codewords - res.len())
-        .collect();
+    // insert padding or image
+    let padding: Vec<u8> = if let Some(image) = image {
+        let positions: Vec<(usize, usize)> = get_final_order(version, ec);
+        let start = res.bit_len();
+        let len = (num_codewords * 8) - start;
+        let stream: Bitstream = positions
+            .into_iter()
+            .skip(start)
+            .take(len)
+            .map(|(row, col)| {
+                image.get(row, col) != crate::layout::MASKS[EMBEDDED_IMAGE_MASK]((row, col))
+            })
+            .collect::<Vec<bool>>()
+            .into();
+
+        stream.as_bytes()
+    } else {
+        [0] //[0xEC, 0x11]
+            .into_iter()
+            .cycle()
+            .take(num_codewords - res.len())
+            .collect()
+    };
     res.push_bytes(&padding);
 
     let res_bytes = res.as_bytes();
@@ -240,6 +264,58 @@ fn interleave_and_ec(bytes: &[u8], version: usize, ec: ECLevel) -> Vec<u8> {
     }
 
     res
+}
+
+// really janky
+fn get_final_order(version: usize, ec: ECLevel) -> Vec<(usize, usize)> {
+    let mut groups: Vec<VecDeque<usize>> = vec![];
+    let mut res: Vec<usize> = vec![];
+    let indicies: Vec<usize> = (0..DATA_CAPACITY[version - 1][ec as usize]).collect();
+
+    let mut indicies_iter = indicies.iter().cloned();
+    // group 1
+    let ((_, num_blocks, block_size), _) = BLOCK_GROUPS[version - 1][ec as usize];
+    for _ in 0..num_blocks {
+        let group: Vec<usize> = (&mut indicies_iter).take(block_size).collect();
+        groups.push(group.into());
+    }
+
+    // group 2
+    if let (_, Some((_, num_blocks, block_size))) = BLOCK_GROUPS[version - 1][ec as usize] {
+        for _ in 0..num_blocks {
+            let group: Vec<usize> = (&mut indicies_iter).take(block_size).collect();
+            groups.push(group.into());
+        }
+    }
+
+    // build result
+    let mut finished = false;
+    while !finished {
+        finished = true;
+        for group in groups.iter_mut() {
+            if !group.is_empty() {
+                finished = false;
+                res.push(group.pop_front().unwrap());
+            }
+        }
+    }
+
+    let order = ModuleOrder::new(version).collect::<Vec<_>>();
+    let mut final_order = vec![(0, 0); res.len() * 8];
+    for (i, data_index) in res.iter().enumerate().take(final_order.len()) {
+        let base = i * 8;
+        let data_base = *data_index * 8;
+        final_order[data_base] = order[base];
+        final_order[data_base + 1] = order[base + 1];
+        final_order[data_base + 2] = order[base + 2];
+        final_order[data_base + 3] = order[base + 3];
+        final_order[data_base + 4] = order[base + 4];
+        final_order[data_base + 5] = order[base + 5];
+        final_order[data_base + 6] = order[base + 6];
+        final_order[data_base + 7] = order[base + 7];
+    }
+
+    final_order
 }
 
 #[cfg(test)]
