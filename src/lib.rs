@@ -1,4 +1,3 @@
-pub mod bitmap;
 mod bitstream;
 pub mod embedded_image;
 pub mod encoding;

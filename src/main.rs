@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use clap::Parser;
 
-use qr::{bitmap, encoding::ECLevel, layout};
+use qr::{encoding::ECLevel, layout};
 
 #[derive(Debug, Parser)]
 struct Args {
@@ -70,8 +70,7 @@ fn main() -> anyhow::Result<()> {
         image,
     )
     .unwrap();
-    let bmp = bitmap::qr_to_bitmap(&res).unwrap();
-    std::fs::write(args.output, bmp).unwrap();
+    res.to_image().save(args.output)?;
 
     Ok(())
 }

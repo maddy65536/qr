@@ -5,6 +5,8 @@ use crate::encoding::{self, ECLevel};
 use crate::tables::{ALIGNMENT_PATTERNS, VERSION_INFO};
 use crate::{bitstream, rsec};
 
+use image::{ImageBuffer, Rgb, RgbImage};
+
 // fixed mask pattern for embedded images
 pub const EMBEDDED_IMAGE_MASK: usize = 7;
 pub const MASKS: [fn((usize, usize)) -> bool; 8] = [
@@ -27,6 +29,9 @@ const FINDER_LIKE: [[bool; FINDER_LIKE_LEN]; 2] = [
         false, false, false, false, true, false, true, true, true, false, true,
     ],
 ];
+
+// output scale
+const SCALE: usize = 4;
 
 #[derive(Debug, Clone)]
 pub struct Qr {
@@ -87,6 +92,41 @@ impl Qr {
 
     pub fn score(&self) -> usize {
         score_matrix(&self.data)
+    }
+
+    pub fn to_image(&self) -> RgbImage {
+        // finalize layout and scaling
+        let mut res: Vec<Vec<bool>> = iter::repeat_n(
+            iter::repeat_n(false, (self.data[0].len() + 8) * SCALE).collect(),
+            (self.data.len() + 8) * SCALE,
+        )
+        .collect();
+        for (i, row) in res
+            .iter_mut()
+            .enumerate()
+            .take((self.data[0].len() + 4) * SCALE)
+            .skip(4 * SCALE)
+        {
+            for (j, module) in row
+                .iter_mut()
+                .enumerate()
+                .take((self.data.len() + 4) * SCALE)
+                .skip(4 * SCALE)
+            {
+                *module = self.data[(i / SCALE) - 4][(j / SCALE) - 4];
+            }
+        }
+
+        let mut im: RgbImage = ImageBuffer::new(res[0].len() as u32, res.len() as u32);
+        for (x, y, pixel) in im.enumerate_pixels_mut() {
+            let module = res[y as usize][x as usize];
+            *pixel = if module {
+                Rgb([0, 0, 0])
+            } else {
+                Rgb([255, 255, 255])
+            };
+        }
+        im
     }
 }
 
