@@ -1,7 +1,7 @@
 # qr
 A command line qr code generator.
 
-Supports all versions, all error correction levels, and byte, alphanumeric, and numeric modes.
+Supports all versions, all error correction levels, and all encoding modes.
 
 ```
 Usage: qr "message" [options]
