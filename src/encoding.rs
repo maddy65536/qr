@@ -1,4 +1,5 @@
 use clap::ValueEnum;
+use encoding_rs::SHIFT_JIS;
 
 use std::collections::VecDeque;
 
@@ -31,6 +32,8 @@ pub fn detect_mode(data: &str) -> Mode {
         Mode::Numeric
     } else if is_alphanumeric(data) {
         Mode::Alphanumeric
+    } else if is_kanji(data) {
+        Mode::Kanji
     } else {
         Mode::Byte
     }
@@ -44,6 +47,19 @@ fn is_alphanumeric(data: &str) -> bool {
     data.chars().all(|c| ALPHANUMERIC_ORDER.contains(&c))
 }
 
+// this feels inefficient
+fn is_kanji(data: &str) -> bool {
+    data.chars().all(|c| {
+        let s = c.to_string();
+        let (encoded, _, error) = SHIFT_JIS.encode(&s);
+        if error || encoded.len() < 2 {
+            return false;
+        }
+        let value = (encoded[0] as u16) << 8 | (encoded[1] as u16);
+        (0x8140..=0x9FFC).contains(&value) || (0xE040..=0xEBBF).contains(&value)
+    })
+}
+
 pub fn get_length_bits(mode: Mode, version: usize) -> Option<usize> {
     let index = match version {
         1..=9 => 0,
@@ -54,14 +70,15 @@ pub fn get_length_bits(mode: Mode, version: usize) -> Option<usize> {
     Some(LENGTH_BITS[(mode as u32).ilog2() as usize][index])
 }
 
-pub fn data_len(mode: Mode, len: usize) -> usize {
+pub fn data_len(mode: Mode, data: &str) -> usize {
+    let len = data.len();
     match mode {
         Mode::Numeric => {
             (len / 3) * 10 + ((len % 3 == 1) as usize) * 4 + ((len % 3 == 2) as usize) * 7
         }
         Mode::Alphanumeric => ((len / 2) * 11) + ((len & 1) * 6),
         Mode::Byte => len * 8,
-        Mode::Kanji => unimplemented!(),
+        Mode::Kanji => data.chars().count() * 13,
     }
 }
 
@@ -91,7 +108,12 @@ pub fn encode(data: &str, mode: Mode, version: usize, ec: ECLevel) -> Option<Vec
     res.push_u8(mode as u8, 4);
 
     // length indicator
-    res.push_u16(data.len() as u16, get_length_bits(mode, version)?);
+    let len = if let Mode::Kanji = mode {
+        data.chars().count()
+    } else {
+        data.len()
+    };
+    res.push_u16(len as u16, get_length_bits(mode, version)?);
 
     match mode {
         Mode::Numeric => {
@@ -125,7 +147,31 @@ pub fn encode(data: &str, mode: Mode, version: usize, ec: ECLevel) -> Option<Vec
                 res.push_u8(*b, 8);
             }
         }
-        Mode::Kanji => unimplemented!(),
+        Mode::Kanji => {
+            let (encoded, _, error) = SHIFT_JIS.encode(data);
+            if error {
+                return None;
+            }
+
+            // at this point, we know the data should entirely consist of 2 byte characters
+            for chunk in encoded.chunks(2) {
+                let c = (chunk[0] as u16) << 8 | (chunk[1] as u16);
+
+                let subtraction_value = if (0x8140..=0x9FFC).contains(&c.into()) {
+                    0x8140
+                } else if (0xE040..=0xEBBF).contains(&c.into()) {
+                    0xC140
+                } else {
+                    return None;
+                };
+
+                let subtracted = c - subtraction_value;
+                let upper = (subtracted >> 8) & 0xFF;
+                let lower = subtracted & 0xFF;
+                let encoded = (upper * 0xC0) + lower;
+                res.push_u16(encoded, 13);
+            }
+        }
     }
 
     res.push_u8(0, 4); // insert terminator
@@ -206,7 +252,7 @@ mod tests {
         assert_eq!(detect_mode("123456ABC"), Mode::Alphanumeric);
         assert_eq!(detect_mode("123456ABCabc'!%&"), Mode::Byte);
         assert_eq!(detect_mode("123456ABCDEFabcdef'!%&¥"), Mode::Byte);
-        assert_eq!(detect_mode("一二三四五六七八九十"), Mode::Byte);
+        assert_eq!(detect_mode("一二三四五六七八九十"), Mode::Kanji);
     }
 
     #[test]
@@ -219,12 +265,13 @@ mod tests {
 
     #[test]
     fn test_data_len() {
-        assert_eq!(data_len(Mode::Byte, 4), 32);
-        assert_eq!(data_len(Mode::Numeric, 6), 20);
-        assert_eq!(data_len(Mode::Numeric, 7), 24);
-        assert_eq!(data_len(Mode::Numeric, 8), 27);
-        assert_eq!(data_len(Mode::Alphanumeric, 4), 22);
-        assert_eq!(data_len(Mode::Alphanumeric, 5), 28);
+        assert_eq!(data_len(Mode::Byte, "aaaa"), 32);
+        assert_eq!(data_len(Mode::Numeric, "123456"), 20);
+        assert_eq!(data_len(Mode::Numeric, "1234567"), 24);
+        assert_eq!(data_len(Mode::Numeric, "12345678"), 27);
+        assert_eq!(data_len(Mode::Alphanumeric, "ABC1"), 22);
+        assert_eq!(data_len(Mode::Alphanumeric, "ABC12"), 28);
+        assert_eq!(data_len(Mode::Kanji, "のワの"), 39);
     }
 
     #[test]

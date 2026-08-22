@@ -5,3 +5,4 @@ edition = "2024"
 
 [dependencies]
 clap = { version = "4.5.38", features = ["derive"] }
+encoding_rs = { version = "0.8.35", features = ["less-slow-kanji-encode"] }

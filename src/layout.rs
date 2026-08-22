@@ -56,8 +56,7 @@ impl Qr {
         // encode data
         let mode = encoding::detect_mode(data);
         println!("mode: {:?}", mode);
-        // need a better length calculation for the other modes but it works for now
-        let version = encoding::detect_version(mode, encoding::data_len(mode, data.len()), ec)
+        let version = encoding::detect_version(mode, encoding::data_len(mode, data), ec)
             .expect("too much data")
             .max(min_version);
         println!("version: {:?}", version);
@@ -121,8 +120,8 @@ pub fn make_fixed_patterns(version: usize) -> Option<Vec<Vec<bool>>> {
     for (row, module) in res.iter_mut().enumerate() {
         module[6] = row & 1 == 0;
     }
-    for col in 0..max {
-        res[6][col] = col & 1 == 0;
+    for (col, module) in res[6].iter_mut().enumerate().take(max) {
+        *module = col & 1 == 0;
     }
 
     // draw finders
