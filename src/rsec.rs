@@ -1,8 +1,17 @@
 // based on code from https://en.wikiversity.org/wiki/Reed%E2%80%93Solomon_codes_for_coders
+use crate::error::Result;
 use crate::tables::{GF_EXP, GF_LOG};
 
 const QR_FORMAT_GENERATOR: usize = 0x537;
 const QR_FORMAT_MASK: usize = 0b101010000010010;
+
+#[derive(Debug, thiserror::Error)]
+pub enum RsecError {
+    #[error("Message too long: {0} but max is 255")]
+    MessageTooLong(usize),
+    #[error("Tried to encode invalid format")]
+    InvalidFormat,
+}
 
 // // turns out i didn't need this
 // pub fn gf_add(x: u8, y: u8) -> u8 {
@@ -54,12 +63,9 @@ pub fn rs_generator_poly(num_ec_blocks: usize) -> Vec<u8> {
     res
 }
 
-pub fn rs_encode(data: &[u8], num_ec_blocks: usize) -> Vec<u8> {
+pub fn rs_encode(data: &[u8], num_ec_blocks: usize) -> Result<Vec<u8>> {
     if data.len() + num_ec_blocks > 255 {
-        panic!(
-            "message too long! was {} but max is 255!",
-            data.len() + num_ec_blocks
-        )
+        return Err(RsecError::MessageTooLong(data.len() + num_ec_blocks).into());
     }
 
     let gen_poly = rs_generator_poly(num_ec_blocks);
@@ -77,7 +83,7 @@ pub fn rs_encode(data: &[u8], num_ec_blocks: usize) -> Vec<u8> {
     }
 
     res[..data.len()].copy_from_slice(data);
-    res
+    Ok(res)
 }
 
 pub fn qr_format_check(fmt: usize) -> usize {
@@ -90,15 +96,15 @@ pub fn qr_format_check(fmt: usize) -> usize {
     res
 }
 
-pub fn qr_format_encode(fmt: usize) -> usize {
+pub fn qr_format_encode(fmt: usize) -> Result<usize> {
     if fmt > 0b11111 {
-        panic!("tried to encode invalid format!")
+        return Err(RsecError::InvalidFormat.into());
     }
-    (fmt << 10) | qr_format_check(fmt << 10)
+    Ok((fmt << 10) | qr_format_check(fmt << 10))
 }
 
-pub fn qr_format_encode_masked(fmt: usize) -> usize {
-    qr_format_encode(fmt) ^ QR_FORMAT_MASK
+pub fn qr_format_encode_masked(fmt: usize) -> Result<usize> {
+    Ok(qr_format_encode(fmt)? ^ QR_FORMAT_MASK)
 }
 
 #[cfg(test)]
@@ -163,7 +169,7 @@ mod tests {
         ];
         let res = rs_encode(&data, 10);
         assert_eq!(
-            res,
+            res.expect("should work in test"),
             vec![
                 0x40, 0xD2, 0x75, 0x47, 0x76, 0x17, 0x32, 0x06, 0x27, 0x26, 0x96, 0xC6, 0xC6, 0x96,
                 0x70, 0xEC, 0xBC, 0x2A, 0x90, 0x13, 0x6B, 0xAF, 0xEF, 0xFD, 0x4B, 0xE0,
@@ -179,7 +185,7 @@ mod tests {
         ];
         let res = rs_encode(&data, 7);
         assert_eq!(
-            res,
+            res.expect("should work in test"),
             vec![
                 0x40, 0x77, 0x46, 0x57, 0x37, 0x42, 0x03, 0xA3, 0x30, 0xEC, 0x11, 0xEC, 0x11, 0xEC,
                 0x11, 0xEC, 0x11, 0xEC, 0x11, 0xD7, 0x39, 0xC0, 0x0C, 0x03, 0x43, 0x5C,
@@ -189,6 +195,9 @@ mod tests {
 
     #[test]
     fn test_format_encode() {
-        assert_eq!(qr_format_encode(0b00011), 0b000111101011001)
+        assert_eq!(
+            qr_format_encode(0b00011).expect("should work in test"),
+            0b000111101011001
+        )
     }
 }

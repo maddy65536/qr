@@ -1,3 +1,11 @@
+use crate::error::Result;
+
+#[derive(Debug, thiserror::Error)]
+pub enum BitstreamError {
+    #[error("Can't push {0} bits of a u{1}")]
+    TooBig(usize, usize),
+}
+
 /// A poorly implemented bitstream using a vector of booleans
 #[derive(Debug, Default)]
 pub struct Bitstream {
@@ -19,36 +27,39 @@ impl Bitstream {
         self.data.push(data);
     }
 
-    pub fn push_u8(&mut self, data: u8, len: usize) {
+    pub fn push_u8(&mut self, data: u8, len: usize) -> Result<()> {
         if len > 8 {
-            panic!("can't push {} bits of a u8!", len);
+            return Err(BitstreamError::TooBig(len, 8).into());
         }
         for i in (0..len).rev() {
             self.data.push((data >> i) & 1 == 1);
         }
+        Ok(())
     }
 
-    pub fn push_u16(&mut self, data: u16, len: usize) {
+    pub fn push_u16(&mut self, data: u16, len: usize) -> Result<()> {
         if len > 16 {
-            panic!("can't push {} bits of a u16!", len);
+            return Err(BitstreamError::TooBig(len, 16).into());
         }
         for i in (0..len).rev() {
             self.data.push((data >> i) & 1 == 1);
         }
+        Ok(())
     }
 
-    pub fn push_u32(&mut self, data: u32, len: usize) {
+    pub fn push_u32(&mut self, data: u32, len: usize) -> Result<()> {
         if len > 32 {
-            panic!("can't push {} bits of a u32!", len);
+            return Err(BitstreamError::TooBig(len, 32).into());
         }
         for i in (0..len).rev() {
             self.data.push((data >> i) & 1 == 1);
         }
+        Ok(())
     }
 
     pub fn push_bytes(&mut self, data: &[u8]) {
         for b in data {
-            self.push_u8(*b, 8);
+            let _ = self.push_u8(*b, 8);
         }
     }
 
@@ -119,24 +130,24 @@ mod tests {
     #[test]
     fn test_bitstream_u8() {
         let mut b = Bitstream::new();
-        b.push_u8(0xAB, 8);
-        b.push_u8(0xAA, 3);
+        let _ = b.push_u8(0xAB, 8);
+        let _ = b.push_u8(0xAA, 3);
         assert_eq!(b.as_bytes(), vec![0xAB, 0x40])
     }
 
     #[test]
     fn test_bitstream_u16() {
         let mut b = Bitstream::new();
-        b.push_u16(0xABCD, 16);
-        b.push_u16(0x0005, 1);
+        let _ = b.push_u16(0xABCD, 16);
+        let _ = b.push_u16(0x0005, 1);
         assert_eq!(b.as_bytes(), vec![0xAB, 0xCD, 0x80])
     }
 
     #[test]
     fn test_bitstream_u32() {
         let mut b = Bitstream::new();
-        b.push_u32(0xABCDEF12, 32);
-        b.push_u32(0x00000005, 1);
+        let _ = b.push_u32(0xABCDEF12, 32);
+        let _ = b.push_u32(0x00000005, 1);
         assert_eq!(b.as_bytes(), vec![0xAB, 0xCD, 0xEF, 0x12, 0x80])
     }
 }

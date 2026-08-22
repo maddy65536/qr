@@ -68,8 +68,7 @@ fn main() -> anyhow::Result<()> {
         args.mask.map(|x| x as usize),
         args.version.map(|x| x as usize),
         image,
-    )
-    .unwrap();
+    )?;
     res.to_image().save(args.output)?;
 
     Ok(())

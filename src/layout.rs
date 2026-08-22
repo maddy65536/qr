@@ -2,6 +2,7 @@ use std::iter;
 
 use crate::embedded_image::EmbeddedImage;
 use crate::encoding::{self, ECLevel};
+use crate::error::{Error, Result};
 use crate::tables::{ALIGNMENT_PATTERNS, VERSION_INFO};
 use crate::{bitstream, rsec};
 
@@ -33,6 +34,12 @@ const FINDER_LIKE: [[bool; FINDER_LIKE_LEN]; 2] = [
 // output scale
 const SCALE: usize = 4;
 
+#[derive(Debug, thiserror::Error)]
+pub enum LayoutError {
+    #[error("Out of bounds checking module type")]
+    OutOfBounds,
+}
+
 #[derive(Debug, Clone)]
 pub struct Qr {
     pub data: Vec<Vec<bool>>,
@@ -41,15 +48,15 @@ pub struct Qr {
 }
 
 impl Qr {
-    pub fn make_blank(version: usize, ec: ECLevel) -> Self {
+    pub fn make_blank(version: usize, ec: ECLevel) -> Result<Self> {
         if !(1..=40).contains(&version) {
-            panic!("tried to make qr code with invalid version!");
+            return Err(Error::InvalidVersion(version));
         }
-        Self {
-            data: make_fixed_patterns(version).unwrap(),
+        Ok(Self {
+            data: make_fixed_patterns(version)?,
             version,
             ec,
-        }
+        })
     }
 
     pub fn make_qr(
@@ -58,7 +65,7 @@ impl Qr {
         mask: Option<usize>,
         min_version: Option<usize>,
         image: Option<EmbeddedImage>,
-    ) -> Option<Self> {
+    ) -> Result<Self> {
         let ec = ec.unwrap_or(ECLevel::Low);
         println!("ec level: {:?}", ec);
         let min_version = min_version.unwrap_or(0);
@@ -75,19 +82,19 @@ impl Qr {
             .expect("too much data")
             .max(min_version);
         println!("version: {:?}", version);
-        let encoded = encoding::encode(data, mode, version, ec, image).unwrap();
+        let encoded = encoding::encode(data, mode, version, ec, image)?;
         let stream: Vec<bool> = bitstream::Bitstream::from_bytes(&encoded).into();
 
         // draw qr code
-        let mut qr = Self::make_blank(version, ec);
-        let order = ModuleOrder::new(version);
+        let mut qr = Self::make_blank(version, ec)?;
+        let order = ModuleOrder::new(version)?;
         stream
             .iter()
             .zip(order)
             .for_each(|(bit, pos)| qr.data[pos.0][pos.1] = *bit);
 
-        qr = apply_best_mask(&qr, mask);
-        Some(qr)
+        qr = apply_best_mask(&qr, mask)?;
+        Ok(qr)
     }
 
     pub fn score(&self) -> usize {
@@ -130,11 +137,11 @@ impl Qr {
     }
 }
 
-pub fn version_to_width(version: usize) -> Option<usize> {
+pub fn version_to_width(version: usize) -> Result<usize> {
     if !(1..=40).contains(&version) {
-        None
+        Err(Error::InvalidVersion(version))
     } else {
-        Some((version * 4) + 17)
+        Ok((version * 4) + 17)
     }
 }
 
@@ -156,9 +163,9 @@ pub fn get_alignment_locations(version: usize) -> Vec<(usize, usize)> {
     res
 }
 
-pub fn make_fixed_patterns(version: usize) -> Option<Vec<Vec<bool>>> {
+pub fn make_fixed_patterns(version: usize) -> Result<Vec<Vec<bool>>> {
     if !(1..=40).contains(&version) {
-        return None;
+        return Err(Error::InvalidVersion(version));
     }
     let max = version_to_width(version)?;
 
@@ -187,9 +194,9 @@ pub fn make_fixed_patterns(version: usize) -> Option<Vec<Vec<bool>>> {
     res[max - 8][8] = true;
 
     // draw the version patterns
-    draw_version(&mut res, version);
+    draw_version(&mut res, version)?;
 
-    Some(res)
+    Ok(res)
 }
 
 pub fn draw_square(
@@ -205,14 +212,12 @@ pub fn draw_square(
     }
 }
 
-/// will panic if you try to draw it in a place where it would be outside the array
 pub fn draw_finder(data: &mut [Vec<bool>], pos: (usize, usize)) {
     draw_square(data, true, (pos.0 - 3, pos.1 - 3), (pos.0 + 3, pos.1 + 3));
     draw_square(data, false, (pos.0 - 2, pos.1 - 2), (pos.0 + 2, pos.1 + 2));
     draw_square(data, true, (pos.0 - 1, pos.1 - 1), (pos.0 + 1, pos.1 + 1));
 }
 
-/// will panic if you try to draw it in a place where it would be outside the array
 pub fn draw_alignment(data: &mut [Vec<bool>], pos: (usize, usize)) {
     draw_square(data, true, (pos.0 - 2, pos.1 - 2), (pos.0 + 2, pos.1 + 2));
     draw_square(data, false, (pos.0 - 1, pos.1 - 1), (pos.0 + 1, pos.1 + 1));
@@ -225,9 +230,9 @@ fn draw_number(data: &mut [Vec<bool>], num: usize, coords: &[(usize, usize)]) {
     }
 }
 
-fn draw_format(qr: &mut Qr, mask: usize) {
-    let form = rsec::qr_format_encode_masked(((qr.ec as usize) << 3) | mask);
-    let max = version_to_width(qr.version).unwrap() - 1;
+fn draw_format(qr: &mut Qr, mask: usize) -> Result<()> {
+    let form = rsec::qr_format_encode_masked(((qr.ec as usize) << 3) | mask)?;
+    let max = version_to_width(qr.version)? - 1;
 
     draw_number(
         &mut qr.data,
@@ -271,13 +276,15 @@ fn draw_format(qr: &mut Qr, mask: usize) {
             (8, max),
         ],
     );
+
+    Ok(())
 }
 
-pub fn draw_version(data: &mut [Vec<bool>], version: usize) {
+pub fn draw_version(data: &mut [Vec<bool>], version: usize) -> Result<()> {
     if !(7..=40).contains(&version) {
-        return;
+        return Err(Error::InvalidVersion(version));
     }
-    let max = version_to_width(version).unwrap();
+    let max = version_to_width(version)?;
     let ver = VERSION_INFO[version - 1];
 
     draw_number(
@@ -329,11 +336,13 @@ pub fn draw_version(data: &mut [Vec<bool>], version: usize) {
             (0, max - 11),
         ],
     );
+
+    Ok(())
 }
 
-pub fn is_alignment_pattern(version: usize, pos: (usize, usize)) -> bool {
+pub fn is_alignment_pattern(version: usize, pos: (usize, usize)) -> Result<bool> {
     if !(1..=40).contains(&version) {
-        panic!("invalid version!")
+        return Err(Error::InvalidVersion(version));
     }
     let coords = ALIGNMENT_PATTERNS[version - 1];
     let max = coords.last().unwrap_or(&0);
@@ -344,12 +353,12 @@ pub fn is_alignment_pattern(version: usize, pos: (usize, usize)) -> bool {
                 continue;
             }
             if i.abs_diff(pos.0) < 3 && j.abs_diff(pos.1) < 3 {
-                return true;
+                return Ok(true);
             }
         }
     }
 
-    false
+    Ok(false)
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -364,15 +373,15 @@ pub enum ModuleType {
 }
 
 /// i thought this would be useful but it hasn't been so far, maybe there will be a use?
-pub fn module_type(version: usize, pos: (usize, usize)) -> ModuleType {
+pub fn module_type(version: usize, pos: (usize, usize)) -> Result<ModuleType> {
     // just kinda give up on invalid ones sorry
     if !(1..=40).contains(&version) {
-        panic!("invalid version!")
+        return Err(Error::InvalidVersion(version));
     }
 
-    let max = version_to_width(version).unwrap();
+    let max = version_to_width(version)?;
     if pos.0 >= max || pos.1 >= max {
-        panic!("out of bounds! {} ({}, {})", max, pos.0, pos.1)
+        return Err(LayoutError::OutOfBounds.into());
     }
 
     // finder patterns
@@ -380,22 +389,22 @@ pub fn module_type(version: usize, pos: (usize, usize)) -> ModuleType {
         || ((0..=7).contains(&pos.0) && ((max - 8)..=(max - 1)).contains(&pos.1))
         || ((max - 8)..=(max - 1)).contains(&pos.0) && ((0..=7).contains(&pos.1))
     {
-        return ModuleType::Finder;
+        return Ok(ModuleType::Finder);
     }
 
     // alignment patterns
-    if is_alignment_pattern(version, pos) {
-        return ModuleType::Alignment;
+    if is_alignment_pattern(version, pos)? {
+        return Ok(ModuleType::Alignment);
     }
 
     // timing patterns
     if pos.0 == 6 || pos.1 == 6 {
-        return ModuleType::Timing;
+        return Ok(ModuleType::Timing);
     }
 
     // that one pixel
     if pos.0 == max - 8 && pos.1 == 8 {
-        return ModuleType::Pixel;
+        return Ok(ModuleType::Pixel);
     }
 
     // version info for versions > 6
@@ -403,22 +412,22 @@ pub fn module_type(version: usize, pos: (usize, usize)) -> ModuleType {
         && ((((max - 11)..=(max - 9)).contains(&pos.0) && (0..=5).contains(&pos.1))
             || (((0..=5).contains(&pos.0)) && ((max - 11)..=(max - 9)).contains(&pos.1)))
     {
-        return ModuleType::Version;
+        return Ok(ModuleType::Version);
     }
 
     // format info
     if (pos.0 == 8 && ((0..=8).contains(&pos.1) || ((max - 8)..=(max - 1)).contains(&pos.1)))
         || (pos.1 == 8 && ((0..=8).contains(&pos.0) || ((max - 8)..=(max - 1)).contains(&pos.0)))
     {
-        return ModuleType::Format;
+        return Ok(ModuleType::Format);
     }
 
-    ModuleType::Data
+    Ok(ModuleType::Data)
 }
 
 /// is this postition a data module for the given version?
-pub fn is_data_module(version: usize, pos: (usize, usize)) -> bool {
-    module_type(version, pos) == ModuleType::Data
+pub fn is_data_module(version: usize, pos: (usize, usize)) -> Result<bool> {
+    Ok(module_type(version, pos)? == ModuleType::Data)
 }
 
 pub struct ModuleOrder {
@@ -428,16 +437,16 @@ pub struct ModuleOrder {
 }
 
 impl ModuleOrder {
-    pub fn new(version: usize) -> Self {
+    pub fn new(version: usize) -> Result<Self> {
         if !(1..=40).contains(&version) {
-            panic!("invalid version!")
+            return Err(Error::InvalidVersion(version));
         }
-        let max = version_to_width(version).unwrap() - 1;
-        Self {
+        let max = version_to_width(version)? - 1;
+        Ok(Self {
             curr: (max, max),
             version,
             done: false,
-        }
+        })
     }
 }
 
@@ -448,7 +457,7 @@ impl Iterator for ModuleOrder {
         if self.done {
             return None;
         }
-        let max = version_to_width(self.version)? - 1;
+        let max = version_to_width(self.version).expect("checked version in new") - 1;
         let res = self.curr;
         let mut curr = self.curr;
         loop {
@@ -484,7 +493,7 @@ impl Iterator for ModuleOrder {
             if curr.1 == 6 {
                 curr = (curr.0, curr.1 - 1);
             }
-            if is_data_module(self.version, curr) {
+            if is_data_module(self.version, curr).expect("checked version in new") {
                 self.curr = curr;
                 return Some(res);
             }
@@ -492,27 +501,33 @@ impl Iterator for ModuleOrder {
     }
 }
 
-fn apply_best_mask(qr: &Qr, mask: Option<usize>) -> Qr {
-    let mut choices = (0..=7).map(|n| apply_mask(qr, n));
+fn apply_best_mask(qr: &Qr, mask: Option<usize>) -> Result<Qr> {
+    let choices: Result<Vec<_>> = (0..=7).map(|n| apply_mask(qr, n)).collect();
     if let Some(mask_choice) = mask {
-        return choices.nth(mask_choice).unwrap();
+        return choices?
+            .into_iter()
+            .nth(mask_choice)
+            .ok_or(Error::InvalidMask(mask_choice));
     }
-    let res = choices.min_by_key(Qr::score).unwrap();
+    let res = choices?
+        .into_iter()
+        .min_by_key(Qr::score)
+        .expect("no minimum score?");
     println!("score: {}", res.score());
-    res
+    Ok(res)
 }
 
-fn apply_mask(qr: &Qr, mask: usize) -> Qr {
+fn apply_mask(qr: &Qr, mask: usize) -> Result<Qr> {
     let mut res = qr.clone();
-    draw_format(&mut res, mask);
+    draw_format(&mut res, mask)?;
     for (i, row) in res.data.iter_mut().enumerate() {
         for (j, module) in row.iter_mut().enumerate() {
-            if is_data_module(qr.version, (i, j)) {
+            if is_data_module(qr.version, (i, j))? {
                 *module = *module != MASKS[mask]((i, j));
             }
         }
     }
-    res
+    Ok(res)
 }
 
 fn score_matrix(data: &[Vec<bool>]) -> usize {

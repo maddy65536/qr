@@ -810,6 +810,7 @@ dependencies = [
  "clap",
  "encoding_rs",
  "image",
+ "thiserror",
 ]
 
 [[package]]

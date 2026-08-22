@@ -6,10 +6,27 @@ use std::collections::VecDeque;
 use crate::{
     bitstream::Bitstream,
     embedded_image::EmbeddedImage,
+    error::{Error, Result},
     layout::{EMBEDDED_IMAGE_MASK, ModuleOrder},
     rsec,
     tables::{ALPHANUMERIC_ORDER, BLOCK_GROUPS, DATA_CAPACITY, LENGTH_BITS},
 };
+
+#[derive(Debug, thiserror::Error)]
+pub enum EncodeError {
+    #[error("Invalid char for alphanumeric mode: {0}")]
+    InvalidAlphanumChar(char),
+    #[error("Failed to encode to shift-jis: {0}")]
+    ShiftJisEncode(String),
+    #[error("Shift-jis char out of range: {0:#x}")]
+    ShiftJisOutOfRange(u16),
+    #[error("Non numeric characters in numeric encoding")]
+    NonNumericInNumeric,
+    #[error("Too much data!")]
+    TooBig,
+    #[error("Group depletion")]
+    GroupDepletion,
+}
 
 #[allow(unused)]
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -61,14 +78,14 @@ fn is_kanji(data: &str) -> bool {
     })
 }
 
-pub fn get_length_bits(mode: Mode, version: usize) -> Option<usize> {
+pub fn get_length_bits(mode: Mode, version: usize) -> Result<usize> {
     let index = match version {
         1..=9 => 0,
         10..=26 => 1,
         27..=40 => 2,
-        _ => return None,
+        _ => return Err(Error::InvalidVersion(version)),
     };
-    Some(LENGTH_BITS[(mode as u32).ilog2() as usize][index])
+    Ok(LENGTH_BITS[(mode as u32).ilog2() as usize][index])
 }
 
 pub fn data_len(mode: Mode, data: &str) -> usize {
@@ -84,20 +101,23 @@ pub fn data_len(mode: Mode, data: &str) -> usize {
 }
 
 // find smallest version that fits data
-pub fn detect_version(mode: Mode, len: usize, ec: ECLevel) -> Option<usize> {
+pub fn detect_version(mode: Mode, len: usize, ec: ECLevel) -> Result<usize> {
     for (v, row) in DATA_CAPACITY.iter().enumerate() {
         let capacity = row[ec as usize] * 8;
         // 8 extra bits for mode selector + terminator
         let size = (8 + get_length_bits(mode, v + 1)? + len).next_multiple_of(8);
         if size <= capacity {
-            return Some(v + 1);
+            return Ok(v + 1);
         }
     }
-    None
+    Err(EncodeError::TooBig.into())
 }
 
-fn char_to_alphanum(data: char) -> u16 {
-    ALPHANUMERIC_ORDER.iter().position(|c| *c == data).unwrap() as u16
+fn char_to_alphanum(data: char) -> Result<u16> {
+    Ok(ALPHANUMERIC_ORDER
+        .iter()
+        .position(|c| *c == data)
+        .ok_or(EncodeError::InvalidAlphanumChar(data))? as u16)
 }
 
 pub fn encode(
@@ -106,13 +126,13 @@ pub fn encode(
     version: usize,
     ec: ECLevel,
     image: Option<EmbeddedImage>,
-) -> Option<Vec<u8>> {
+) -> Result<Vec<u8>> {
     let num_codewords = DATA_CAPACITY[version - 1][ec as usize];
 
     let mut res = Bitstream::new();
 
     // mode indicator
-    res.push_u8(mode as u8, 4);
+    res.push_u8(mode as u8, 4)?;
 
     // length indicator
     let len = if let Mode::Kanji = mode {
@@ -120,7 +140,7 @@ pub fn encode(
     } else {
         data.len()
     };
-    res.push_u16(len as u16, get_length_bits(mode, version)?);
+    res.push_u16(len as u16, get_length_bits(mode, version)?)?;
 
     match mode {
         Mode::Numeric => {
@@ -134,7 +154,12 @@ pub fn encode(
                 } else {
                     10
                 };
-                res.push_u16(chunk.parse().unwrap(), len);
+                res.push_u16(
+                    chunk
+                        .parse()
+                        .map_err(|_| EncodeError::NonNumericInNumeric)?,
+                    len,
+                )?;
             }
         }
         Mode::Alphanumeric => {
@@ -142,22 +167,22 @@ pub fn encode(
             while chars.peek().is_some() {
                 let chunk: Vec<char> = chars.by_ref().take(2).collect();
                 if chunk.len() == 1 {
-                    res.push_u16(char_to_alphanum(chunk[0]), 6);
+                    res.push_u16(char_to_alphanum(chunk[0])?, 6)?;
                 } else {
-                    let code = (45 * char_to_alphanum(chunk[0])) + char_to_alphanum(chunk[1]);
-                    res.push_u16(code, 11);
+                    let code = (45 * char_to_alphanum(chunk[0])?) + char_to_alphanum(chunk[1])?;
+                    res.push_u16(code, 11)?;
                 }
             }
         }
         Mode::Byte => {
             for b in data.as_bytes() {
-                res.push_u8(*b, 8);
+                res.push_u8(*b, 8)?;
             }
         }
         Mode::Kanji => {
             let (encoded, _, error) = SHIFT_JIS.encode(data);
             if error {
-                return None;
+                return Err(EncodeError::ShiftJisEncode(data.to_owned()).into());
             }
 
             // at this point, we know the data should entirely consist of 2 byte characters
@@ -169,24 +194,24 @@ pub fn encode(
                 } else if (0xE040..=0xEBBF).contains(&c.into()) {
                     0xC140
                 } else {
-                    return None;
+                    return Err(EncodeError::ShiftJisOutOfRange(c).into());
                 };
 
                 let subtracted = c - subtraction_value;
                 let upper = (subtracted >> 8) & 0xFF;
                 let lower = subtracted & 0xFF;
                 let encoded = (upper * 0xC0) + lower;
-                res.push_u16(encoded, 13);
+                res.push_u16(encoded, 13)?;
             }
         }
     }
 
-    res.push_u8(0, 4); // insert terminator
-    res.push_u8(0, res.free_bits()); // fill remaining bits in last byte
+    res.push_u8(0, 4)?; // insert terminator
+    res.push_u8(0, res.free_bits())?; // fill remaining bits in last byte
 
     // insert padding or image
     let padding: Vec<u8> = if let Some(image) = image {
-        let positions: Vec<(usize, usize)> = get_final_order(version, ec);
+        let positions: Vec<(usize, usize)> = get_final_order(version, ec)?;
         let start = res.bit_len();
         let len = (num_codewords * 8) - start;
         let stream: Bitstream = positions
@@ -210,10 +235,10 @@ pub fn encode(
     res.push_bytes(&padding);
 
     let res_bytes = res.as_bytes();
-    Some(interleave_and_ec(&res_bytes, version, ec))
+    interleave_and_ec(&res_bytes, version, ec)
 }
 
-fn interleave_and_ec(bytes: &[u8], version: usize, ec: ECLevel) -> Vec<u8> {
+fn interleave_and_ec(bytes: &[u8], version: usize, ec: ECLevel) -> Result<Vec<u8>> {
     let mut groups: Vec<VecDeque<u8>> = vec![];
     let mut ec_groups: Vec<VecDeque<u8>> = vec![];
     let mut res: Vec<u8> = vec![];
@@ -223,7 +248,7 @@ fn interleave_and_ec(bytes: &[u8], version: usize, ec: ECLevel) -> Vec<u8> {
     let ((num_ec_blocks, num_blocks, block_size), _) = BLOCK_GROUPS[version - 1][ec as usize];
     for _ in 0..num_blocks {
         let group: Vec<u8> = (&mut bytes_iter).take(block_size).collect();
-        let ec_group = rsec::rs_encode(&group, num_ec_blocks)[group.len()..].to_vec();
+        let ec_group = rsec::rs_encode(&group, num_ec_blocks)?[group.len()..].to_vec();
         groups.push(group.into());
         ec_groups.push(ec_group.into());
     }
@@ -234,7 +259,7 @@ fn interleave_and_ec(bytes: &[u8], version: usize, ec: ECLevel) -> Vec<u8> {
     {
         for _ in 0..num_blocks {
             let group: Vec<u8> = (&mut bytes_iter).take(block_size).collect();
-            let ec_group = rsec::rs_encode(&group, num_ec_blocks)[group.len()..].to_vec();
+            let ec_group = rsec::rs_encode(&group, num_ec_blocks)?[group.len()..].to_vec();
             groups.push(group.into());
             ec_groups.push(ec_group.into());
         }
@@ -247,7 +272,7 @@ fn interleave_and_ec(bytes: &[u8], version: usize, ec: ECLevel) -> Vec<u8> {
         for group in groups.iter_mut() {
             if !group.is_empty() {
                 finished = false;
-                res.push(group.pop_front().unwrap());
+                res.push(group.pop_front().ok_or(EncodeError::GroupDepletion)?);
             }
         }
     }
@@ -258,16 +283,16 @@ fn interleave_and_ec(bytes: &[u8], version: usize, ec: ECLevel) -> Vec<u8> {
         for group in ec_groups.iter_mut() {
             if !group.is_empty() {
                 finished = false;
-                res.push(group.pop_front().unwrap());
+                res.push(group.pop_front().ok_or(EncodeError::GroupDepletion)?);
             }
         }
     }
 
-    res
+    Ok(res)
 }
 
 // really janky
-fn get_final_order(version: usize, ec: ECLevel) -> Vec<(usize, usize)> {
+fn get_final_order(version: usize, ec: ECLevel) -> Result<Vec<(usize, usize)>> {
     let mut groups: Vec<VecDeque<usize>> = vec![];
     let mut res: Vec<usize> = vec![];
     let indicies: Vec<usize> = (0..DATA_CAPACITY[version - 1][ec as usize]).collect();
@@ -295,12 +320,12 @@ fn get_final_order(version: usize, ec: ECLevel) -> Vec<(usize, usize)> {
         for group in groups.iter_mut() {
             if !group.is_empty() {
                 finished = false;
-                res.push(group.pop_front().unwrap());
+                res.push(group.pop_front().ok_or(EncodeError::GroupDepletion)?);
             }
         }
     }
 
-    let order = ModuleOrder::new(version).collect::<Vec<_>>();
+    let order = ModuleOrder::new(version)?.collect::<Vec<_>>();
     let mut final_order = vec![(0, 0); res.len() * 8];
     for (i, data_index) in res.iter().enumerate().take(final_order.len()) {
         let base = i * 8;
@@ -315,7 +340,7 @@ fn get_final_order(version: usize, ec: ECLevel) -> Vec<(usize, usize)> {
         final_order[data_base + 7] = order[base + 7];
     }
 
-    final_order
+    Ok(final_order)
 }
 
 #[cfg(test)]
@@ -333,10 +358,10 @@ mod tests {
 
     #[test]
     fn test_get_length_bits() {
-        assert_eq!(get_length_bits(Mode::Numeric, 1), Some(10));
-        assert_eq!(get_length_bits(Mode::Alphanumeric, 15), Some(11));
-        assert_eq!(get_length_bits(Mode::Byte, 29), Some(16));
-        assert_eq!(get_length_bits(Mode::Kanji, 14), Some(10));
+        assert_eq!(get_length_bits(Mode::Numeric, 1).unwrap(), 10);
+        assert_eq!(get_length_bits(Mode::Alphanumeric, 15).unwrap(), 11);
+        assert_eq!(get_length_bits(Mode::Byte, 29).unwrap(), 16);
+        assert_eq!(get_length_bits(Mode::Kanji, 14).unwrap(), 10);
     }
 
     #[test]
@@ -363,7 +388,8 @@ mod tests {
                 ],
                 5,
                 ECLevel::Quartile
-            ),
+            )
+            .unwrap(),
             vec![
                 0x41, 0x03, 0x11, 0x11, 0x14, 0x13, 0xEC, 0xEC, 0x86, 0x23, 0x11, 0x11, 0x56, 0x30,
                 0xEC, 0xEC, 0xC6, 0xEC, 0x11, 0x11, 0xC6, 0x11, 0xEC, 0xEC, 0xF2, 0xEC, 0x11, 0x11,

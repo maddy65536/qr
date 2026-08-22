@@ -8,3 +8,4 @@ anyhow = "1.0.104"
 clap = { version = "4.5.38", features = ["derive"] }
 encoding_rs = { version = "0.8.35", features = ["less-slow-kanji-encode"] }
 image = "0.25.10"
+thiserror = "2.0.20"
