@@ -201,7 +201,7 @@ pub fn encode(
 
         stream.as_bytes()
     } else {
-        [0] //[0xEC, 0x11]
+        [0xEC, 0x11]
             .into_iter()
             .cycle()
             .take(num_codewords - res.len())
