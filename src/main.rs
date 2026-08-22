@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use clap::Parser;
 
 use qr::{bitmap, encoding::ECLevel, layout};
@@ -22,20 +24,50 @@ struct Args {
     /// Output path
     #[arg(short, long, default_value_t = String::from("output.bmp"))]
     output: String,
+
+    /// Image: file path
+    #[arg(short, long)]
+    image_path: Option<PathBuf>,
+
+    /// Image: x offset
+    #[arg(long, requires = "image_path")]
+    image_x_offset: Option<i32>,
+
+    /// Image: y offset
+    #[arg(long, requires = "image_path")]
+    image_y_offset: Option<i32>,
+
+    /// Image: threshold
+    #[arg(long, requires = "image_path")]
+    image_threshold: Option<u8>,
+
+    /// Image: scale
+    #[arg(long, requires = "image_path")]
+    image_scale: Option<f64>,
 }
 
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
+    let image = if let Some(path) = args.image_path {
+        Some(qr::embedded_image::EmbeddedImage::from_image(
+            image::ImageReader::open(path)?.decode()?,
+            Some((
+                args.image_y_offset.unwrap_or(0),
+                args.image_x_offset.unwrap_or(0),
+            )),
+            args.image_threshold,
+            args.image_scale,
+        ))
+    } else {
+        None
+    };
+
     let res = layout::Qr::make_qr(
         &args.message,
         args.ec,
         args.mask.map(|x| x as usize),
         args.version.map(|x| x as usize),
-        Some(qr::embedded_image::EmbeddedImage::from_image(
-            image::ImageReader::open("nowanobw.png")?.decode()?,
-            0,
-            0,
-        )),
+        image,
     )
     .unwrap();
     let bmp = bitmap::qr_to_bitmap(&res).unwrap();

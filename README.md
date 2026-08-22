@@ -3,14 +3,9 @@ A command line qr code generator.
 
 Supports all versions, all error correction levels, and all encoding modes.
 
-```
-Usage: qr "message" [options]
+Also supports embedding an image in the padding data of the qr code
 
-options:
-    -e / --ec [low|medium|quartile|high]
-    -m / --mask [0-7]
-    -v / --min-version [1-40]
-    -o / --output (path)
-```
+## Usage
+See `qr --help`
 
 ![qr code containing the text "this qr code was generated using this project!"](./example.bmp)
