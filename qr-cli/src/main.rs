@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use clap::Parser;
 
-use qr::{encoding::ECLevel, layout};
+use qr_lib::{embedded_image::EmbeddedImage, encoding::ECLevel, layout};
 
 #[derive(Debug, Parser)]
 struct Args {
@@ -49,7 +49,7 @@ struct Args {
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
     let image = if let Some(path) = args.image_path {
-        Some(qr::embedded_image::EmbeddedImage::from_image(
+        Some(EmbeddedImage::from_image(
             image::ImageReader::open(path)?.decode()?,
             Some((
                 args.image_y_offset.unwrap_or(0),
