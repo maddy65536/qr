@@ -1,13 +1,20 @@
 import init, { QrCodeGenerator, QrCodeArgs, ImageArgs } from "./qr-wasm/pkg/qr_wasm.js"
 
-
-const textentry = document.getElementById("textentry");
-const thebutton = document.getElementById("thebutton");
-const thebutton2 = document.getElementById("thebutton2");
+// output stuff
 const output = document.getElementById("output");
 const canvas = document.getElementById("outputCanvas");
-const fileinput = document.getElementById("fileinput");
+const updateButton = document.getElementById("updateButton");
+const saveButton = document.getElementById("saveButton");
+const copyButton = document.getElementById("copyButton");
 
+// control stuff
+const textentry = document.getElementById("textentry");
+const ecSelect = document.getElementById("ecSelect");
+const maskSelect = document.getElementById("maskSelect");
+const versionNumber = document.getElementById("versionNumber");
+
+// image stuff
+const fileinput = document.getElementById("fileinput");
 
 // Declare the generator variable in the outer scope
 let generator;
@@ -18,11 +25,17 @@ export function generate() {
         return;
     }
 
-    let qr_args = new QrCodeArgs(textentry.value, null, null, null);
-    let qr_data = generator.generate_qr_code(qr_args);
+    let mask = null;
+    if (mask !== "") {
+        mask = Number(maskSelect.value);
+    }
 
-    let ctx = canvas.getContext("2d");
-    let [width, height] = [qr_data.width(), qr_data.height()];
+    const qr_args = new QrCodeArgs(textentry.value, ecSelect.value, mask, Number(versionNumber.value));
+    //TODO: handle errors
+    let qr_data = generator.generate_qr_code(qr_args, null);
+
+    const ctx = canvas.getContext("2d");
+    const [width, height] = [qr_data.width(), qr_data.height()];
     canvas.width = width;
     canvas.height = height;
     const clampedArray = new Uint8ClampedArray(qr_data.data());
@@ -36,12 +49,12 @@ export function generate_image() {
         return;
     }
 
-    let qr_args = new QrCodeArgs(textentry.value, null, null, 15);
-    let img_args = new ImageArgs(10, null, null, null);
-    let qr_data = generator.generate_qr_code_image(qr_args, img_args);
+    const qr_args = new QrCodeArgs(textentry.value, null, null, 15);
+    const img_args = new ImageArgs(10, null, null, null);
+    const qr_data = generator.generate_qr_code(qr_args, img_args);
 
-    let ctx = canvas.getContext("2d");
-    let [width, height] = [qr_data.width(), qr_data.height()];
+    const ctx = canvas.getContext("2d");
+    const [width, height] = [qr_data.width(), qr_data.height()];
     canvas.width = width;
     canvas.height = height;
     const clampedArray = new Uint8ClampedArray(qr_data.data());
@@ -49,16 +62,35 @@ export function generate_image() {
     ctx.putImageData(imageData, 0, 0);
 }
 
+function saveImage() {
+    // lol
+    canvas.toBlob(blob => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.download = 'qr.png';
+        a.href = url;
+        a.click();
+    })
+}
+
+function copyImage() {
+    canvas.toBlob(blob => {
+        const item = new ClipboardItem({ "image/png": blob });
+        navigator.clipboard.write([item]);
+    })
+}
+
 async function run() {
     await init();
     generator = new QrCodeGenerator();
-    thebutton.addEventListener("click", generate);
-    thebutton2.addEventListener("click", generate_image);
+
+    updateButton.addEventListener("click", generate);
+    saveButton.addEventListener("click", saveImage);
+    copyButton.addEventListener("click", copyImage);
+
     fileinput.addEventListener('change', (event) => {
         const file = event.target.files[0];
         if (!file) return;
-
-        console.log("somethng happened")
 
         const reader = new FileReader();
         reader.onload = (e) => {

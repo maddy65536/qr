@@ -6,13 +6,52 @@
 </head>
 
 <body>
-    <h1>Welcome to WASM WORLD!</h1>
-    <input type="text" id="textentry">
-    <input type="button" id="thebutton" value="click this">
-    <input type="button" id="thebutton2" value="click this (image)">
-    <p id="output"></p>
-    <canvas id="outputCanvas" width="100" height="100"></canvas>
-    <input type="file" id="fileinput" accept="image/*" autocomplete="off">
+    <h1>QR code generator</h1>
+    <div class="section" id="output">
+        <canvas id="outputCanvas" width="100" height="100"></canvas>
+        <p id="output"></p>
+        <form id="outputForm">
+            <input type="button" id="updateButton" value="update">
+            <input type="button" id="saveButton" value="save">
+            <input type="button" id="copyButton" value="copy">
+        </form>
+    </div>
+    <div class="section" id="controls">
+        <form id="controlForm">
+            <label for="textentry">Text:</label>
+            <input type="text" name="textentry" id="textentry" value="example">
+            <label for="ecSelect">Error correction level:</label>
+            <select name="ecSelect" id="ecSelect">
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="quartile">Quartile</option>
+                <option value="high">High</option>
+            </select>
+            <label for="maskSelect">Mask:</label>
+            <select name="maskSelect" id="maskSelect">
+                <option value="">Auto</option>
+                <option value="0">0</option>
+                <option value="1">1</option>
+                <option value="2">2</option>
+                <option value="3">3</option>
+                <option value="4">4</option>
+                <option value="5">5</option>
+                <option value="6">6</option>
+                <option value="7">7</option>
+            </select>
+            <label for="versionNumber">Minimum version:</label>
+            <input type="number" name="versionNumber" id="versionNumber" min="1" max="40" step="1" value="1">
+        </form>
+    </div>
+    <div class="section" id="imageControls">
+        <form id="imageForm">
+            <label for="fileinput">Image:</label>
+            <input type="file" name="fileinput" id="fileinput" accept="image/*" autocomplete="off">
+        </form>
+    </div>
+    <div class="section" id="info">
+        <p>well, there is a qr code generator here</p>
+    </div>
 </body>
 
 </html>

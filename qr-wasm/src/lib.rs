@@ -97,48 +97,33 @@ impl QrCodeGenerator {
         Ok(())
     }
 
-    pub fn generate_qr_code(&self, args: QrCodeArgs) -> Result<QrCode, JsError> {
-        let qr = Qr::make_qr(
-            args.data.as_str(),
-            args.ec.map(|s| s.parse()).transpose()?,
-            args.mask,
-            args.min_version,
-            None,
-        )?
-        .to_image();
-
-        let (width, height) = qr.dimensions();
-
-        Ok(QrCode {
-            data: qr.into_raw(),
-            width,
-            height,
-        })
-    }
-
-    pub fn generate_qr_code_image(
+    pub fn generate_qr_code(
         &self,
-        args: QrCodeArgs,
-        img_args: ImageArgs,
+        qr_args: QrCodeArgs,
+        img_args: Option<ImageArgs>,
     ) -> Result<QrCode, JsError> {
-        let Some(ref image) = self.image else {
-            return Err(JsError::new("No image provided"));
-        };
+        let img = img_args
+            .map(|img_args| {
+                Ok::<EmbeddedImage, JsError>(EmbeddedImage::from_image(
+                    self.image
+                        .as_ref()
+                        .ok_or(JsError::new("No image provided"))?,
+                    Some((
+                        img_args.y_offset.unwrap_or(0),
+                        img_args.x_offset.unwrap_or(0),
+                    )),
+                    img_args.threshold,
+                    img_args.scale,
+                ))
+            })
+            .transpose()?;
 
         let qr = Qr::make_qr(
-            args.data.as_str(),
-            args.ec.map(|s| s.parse()).transpose()?,
-            args.mask,
-            args.min_version,
-            Some(EmbeddedImage::from_image(
-                image,
-                Some((
-                    img_args.y_offset.unwrap_or(0),
-                    img_args.x_offset.unwrap_or(0),
-                )),
-                img_args.threshold,
-                img_args.scale,
-            )),
+            qr_args.data.as_str(),
+            qr_args.ec.map(|s| s.parse()).transpose()?,
+            qr_args.mask,
+            qr_args.min_version,
+            img,
         )?
         .to_image();
 
