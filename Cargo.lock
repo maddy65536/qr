@@ -809,23 +809,32 @@ dependencies = [
 ]
 
 [[package]]
-name = "qr_cli"
+name = "qr-cli"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
  "image",
- "qr_lib",
+ "qr-lib",
 ]
 
 [[package]]
-name = "qr_lib"
+name = "qr-lib"
 version = "0.1.0"
 dependencies = [
  "clap",
  "encoding_rs",
  "image",
  "thiserror",
+]
+
+[[package]]
+name = "qr-wasm"
+version = "0.1.0"
+dependencies = [
+ "image",
+ "qr-lib",
+ "wasm-bindgen",
 ]
 
 [[package]]

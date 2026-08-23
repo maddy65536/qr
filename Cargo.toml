@@ -2,10 +2,10 @@
 resolver = "3"
 members = [
     "qr-cli",
-    "qr-lib",
+    "qr-lib", "qr-wasm",
 ]
 
 [workspace.dependencies]
-qr_lib = { path = "qr-lib" }
+qr-lib = { path = "qr-lib" }
 clap = { version = "4.5.38", features = ["derive"] }
 image = "0.25.10"

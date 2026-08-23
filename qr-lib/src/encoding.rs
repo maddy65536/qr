@@ -1,13 +1,14 @@
 use clap::ValueEnum;
 use encoding_rs::SHIFT_JIS;
 
-use std::collections::VecDeque;
+use std::{collections::VecDeque, str::FromStr};
 
 use crate::{
+    EMBEDDED_IMAGE_MASK,
     bitstream::Bitstream,
     embedded_image::EmbeddedImage,
     error::{Error, Result},
-    layout::{EMBEDDED_IMAGE_MASK, ModuleOrder},
+    layout::ModuleOrder,
     rsec,
     tables::{ALPHANUMERIC_ORDER, BLOCK_GROUPS, DATA_CAPACITY, LENGTH_BITS},
 };
@@ -26,6 +27,8 @@ pub enum EncodeError {
     TooBig,
     #[error("Group depletion")]
     GroupDepletion,
+    #[error("Invalid EC level: {0}")]
+    EcLevel(String),
 }
 
 #[allow(unused)]
@@ -43,6 +46,20 @@ pub enum ECLevel {
     Medium = 0b00,
     Quartile = 0b11,
     High = 0b10,
+}
+
+impl FromStr for ECLevel {
+    type Err = Error;
+
+    fn from_str(s: &str) -> std::prelude::v1::Result<Self, Self::Err> {
+        match s {
+            "low" => Ok(ECLevel::Low),
+            "medium" => Ok(ECLevel::Medium),
+            "quartile" => Ok(ECLevel::Quartile),
+            "high" => Ok(ECLevel::High),
+            l => Err(EncodeError::EcLevel(l.to_owned()).into()),
+        }
+    }
 }
 
 pub fn detect_mode(data: &str) -> Mode {

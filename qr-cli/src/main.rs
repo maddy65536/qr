@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use clap::Parser;
 
-use qr_lib::{embedded_image::EmbeddedImage, encoding::ECLevel, layout};
+use qr_lib::{Qr, embedded_image::EmbeddedImage, encoding::ECLevel};
 
 #[derive(Debug, Parser)]
 struct Args {
@@ -50,7 +50,7 @@ fn main() -> anyhow::Result<()> {
     let args = Args::parse();
     let image = if let Some(path) = args.image_path {
         Some(EmbeddedImage::from_image(
-            image::ImageReader::open(path)?.decode()?,
+            &image::ImageReader::open(path)?.decode()?,
             Some((
                 args.image_y_offset.unwrap_or(0),
                 args.image_x_offset.unwrap_or(0),
@@ -62,7 +62,7 @@ fn main() -> anyhow::Result<()> {
         None
     };
 
-    let res = layout::Qr::make_qr(
+    let res = Qr::make_qr(
         &args.message,
         args.ec,
         args.mask.map(|x| x as usize),

@@ -7,7 +7,7 @@ pub struct EmbeddedImage {
 
 impl EmbeddedImage {
     pub fn from_image(
-        image: DynamicImage,
+        image: &DynamicImage,
         offset: Option<(i32, i32)>,
         threshold: Option<u8>,
         scale: Option<f64>,
@@ -22,7 +22,7 @@ impl EmbeddedImage {
                 image::imageops::FilterType::Lanczos3,
             )
         } else {
-            image
+            image.clone()
         };
 
         let greyscale = image.to_luma8();
