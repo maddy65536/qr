@@ -282,8 +282,9 @@ fn draw_format(qr: &mut Qr, mask: usize) -> Result<()> {
 
 pub fn draw_version(data: &mut [Vec<bool>], version: usize) -> Result<()> {
     if !(7..=40).contains(&version) {
-        return Err(Error::InvalidVersion(version));
+        return Ok(());
     }
+
     let max = version_to_width(version)?;
     let ver = VERSION_INFO[version - 1];
 
