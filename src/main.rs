@@ -22,7 +22,7 @@ struct Args {
     version: Option<u64>,
 
     /// Output path
-    #[arg(short, long, default_value_t = String::from("output.bmp"))]
+    #[arg(short, long, default_value_t = String::from("output.png"))]
     output: String,
 
     /// Image: file path
