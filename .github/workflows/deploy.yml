@@ -30,7 +30,7 @@ jobs:
 
 
           - name: Build WebAssembly Project
-            run: wasm-pack build --target web
+            run: wasm-pack build qr-wasm --target web
 
           - name: Setup GitHub Pages Environment
             uses: actions/configure-pages@v4
