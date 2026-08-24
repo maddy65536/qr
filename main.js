@@ -57,7 +57,6 @@ export function generate() {
         let scale = parseFloat(scaleNumber.value);
 
         image_args = new ImageArgs(x_offset, y_offset, threshold, scale);
-        console.log("meow");
     }
 
     let qr_data;
