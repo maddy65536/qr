@@ -1,11 +1,10 @@
 # qr
-A command line qr code generator.
+A flexible(ish) qr code generator.
 
-Supports all versions, all error correction levels, and all encoding modes.
+The neat feature is that you can stick an image in the padding data.
 
-Also supports embedding an image in the padding data of the qr code
-
-## Usage
-See `qr --help`
+You can use it online at https://maddy.zip/qr/ or use the cli in `qr-cli`.
 
 ![qr code containing the text "this qr code was generated using this project!"](./example.bmp)
+
+![qr code with an image embedded in it containing the text "this too!"](./example2.png)

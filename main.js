@@ -26,7 +26,6 @@ function clamp(num, low, high) {
     return Math.max(low, Math.min(high, num))
 }
 
-// Declare the generator variable in the outer scope
 let generator;
 
 export function generate() {
