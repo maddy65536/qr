@@ -1,8 +1,8 @@
 import init, { QrCodeGenerator, QrCodeArgs, ImageArgs } from "./qr-wasm/pkg/qr_wasm.js"
 
 // output stuff
-const output = document.getElementById("output");
 const canvas = document.getElementById("outputCanvas");
+const errorOutput = document.getElementById("errorOutput");
 const updateButton = document.getElementById("updateButton");
 const saveButton = document.getElementById("saveButton");
 const copyButton = document.getElementById("copyButton");
@@ -14,12 +14,24 @@ const maskSelect = document.getElementById("maskSelect");
 const versionNumber = document.getElementById("versionNumber");
 
 // image stuff
+const imageEnable = document.getElementById("imageEnable");
 const fileinput = document.getElementById("fileinput");
+const xOffsetNumber = document.getElementById("xOffsetNumber");
+const yOffsetNumber = document.getElementById("yOffsetNumber");
+const threshholdNumber = document.getElementById("threshholdNumber");
+const scaleNumber = document.getElementById("scaleNumber");
+
+
+function clamp(num, low, high) {
+    return Math.max(low, Math.min(high, num))
+}
 
 // Declare the generator variable in the outer scope
 let generator;
 
 export function generate() {
+    errorOutput.innerText = "";
+
     if (!generator) {
         console.error("WASM module is not initialized yet!");
         return;
@@ -29,10 +41,32 @@ export function generate() {
     if (mask !== "") {
         mask = Number(maskSelect.value);
     }
+    const version = clamp(Number(versionNumber.value), 1, 40);
+    const qr_args = new QrCodeArgs(textentry.value, ecSelect.value, mask, version);
 
-    const qr_args = new QrCodeArgs(textentry.value, ecSelect.value, mask, Number(versionNumber.value));
-    //TODO: handle errors
-    let qr_data = generator.generate_qr_code(qr_args, null);
+    let image_args = null;
+    if (imageEnable.checked) {
+        if (!generator.has_image()) {
+            errorOutput.innerText = "Image enabled, but no image uploaded!";
+            return;
+        }
+
+        let x_offset = Number(xOffsetNumber.value);
+        let y_offset = Number(yOffsetNumber.value);
+        let threshold = clamp(Number(threshholdNumber.value), 0, 255);
+        let scale = parseFloat(scaleNumber.value);
+
+        image_args = new ImageArgs(x_offset, y_offset, threshold, scale);
+        console.log("meow");
+    }
+
+    let qr_data;
+    try {
+        qr_data = generator.generate_qr_code(qr_args, image_args);
+    } catch (err) {
+        errorOutput.innerText = err.message;
+        return;
+    }
 
     const ctx = canvas.getContext("2d");
     const [width, height] = [qr_data.width(), qr_data.height()];
@@ -101,6 +135,8 @@ async function run() {
 
         reader.readAsArrayBuffer(file);
     });
+
+    generate();
 }
 
 run();

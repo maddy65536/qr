@@ -18,7 +18,7 @@ use crate::layout::{ModuleOrder, apply_best_mask, make_fixed_patterns, score_mat
 // fixed mask pattern for embedded images
 pub const EMBEDDED_IMAGE_MASK: usize = 7;
 // output scale
-const SCALE: usize = 4;
+const SCALE: usize = 3;
 
 #[derive(Debug, Clone)]
 pub struct Qr {

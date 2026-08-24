@@ -97,6 +97,10 @@ impl QrCodeGenerator {
         Ok(())
     }
 
+    pub fn has_image(&self) -> bool {
+        self.image.is_some()
+    }
+
     pub fn generate_qr_code(
         &self,
         qr_args: QrCodeArgs,

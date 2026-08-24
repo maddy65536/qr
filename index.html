@@ -3,54 +3,116 @@
 
 <head>
     <script type="module" src="main.js" defer></script>
+    <link rel="stylesheet" href="style.css">
 </head>
 
 <body>
-    <h1>QR code generator</h1>
-    <div class="section" id="output">
-        <canvas id="outputCanvas" width="100" height="100"></canvas>
-        <p id="output"></p>
-        <form id="outputForm">
-            <input type="button" id="updateButton" value="update">
-            <input type="button" id="saveButton" value="save">
-            <input type="button" id="copyButton" value="copy">
-        </form>
-    </div>
-    <div class="section" id="controls">
-        <form id="controlForm">
-            <label for="textentry">Text:</label>
-            <input type="text" name="textentry" id="textentry" value="example">
-            <label for="ecSelect">Error correction level:</label>
-            <select name="ecSelect" id="ecSelect">
-                <option value="low">Low</option>
-                <option value="medium">Medium</option>
-                <option value="quartile">Quartile</option>
-                <option value="high">High</option>
-            </select>
-            <label for="maskSelect">Mask:</label>
-            <select name="maskSelect" id="maskSelect">
-                <option value="">Auto</option>
-                <option value="0">0</option>
-                <option value="1">1</option>
-                <option value="2">2</option>
-                <option value="3">3</option>
-                <option value="4">4</option>
-                <option value="5">5</option>
-                <option value="6">6</option>
-                <option value="7">7</option>
-            </select>
-            <label for="versionNumber">Minimum version:</label>
-            <input type="number" name="versionNumber" id="versionNumber" min="1" max="40" step="1" value="1">
-        </form>
-    </div>
-    <div class="section" id="imageControls">
-        <form id="imageForm">
-            <label for="fileinput">Image:</label>
-            <input type="file" name="fileinput" id="fileinput" accept="image/*" autocomplete="off">
-        </form>
-    </div>
-    <div class="section" id="info">
-        <p>well, there is a qr code generator here</p>
+    <div class="pageWrapper">
+        <h1>QR code generator</h1>
+        <div class=" wrapper">
+            <div class="section" id="output">
+                <canvas id="outputCanvas" width="100" height="100"></canvas>
+                <p id="errorOutput"></p>
+                <form id="outputForm">
+                    <div class="formGroup">
+                        <input type="button" id="updateButton" value="update">
+                        <input type="button" id="saveButton" value="save">
+                        <input type="button" id="copyButton" value="copy">
+                    </div>
+                </form>
+            </div>
+            <div class="section" id="controls">
+                <h2>QR controls</h2>
+                <form id="controlForm">
+                    <div class="formGroup">
+                        <label for="textentry">Text:</label>
+                        <input type="text" name="textentry" id="textentry" value="example">
+                    </div>
+                    <div class="formGroup">
+                        <label for="ecSelect">Error correction level:</label>
+                        <select name="ecSelect" id="ecSelect">
+                            <option value="low">Low</option>
+                            <option value="medium">Medium</option>
+                            <option value="quartile">Quartile</option>
+                            <option value="high">High</option>
+                        </select>
+                    </div>
+                    <div class="formGroup">
+                        <label for="maskSelect">Mask:</label>
+                        <select name="maskSelect" id="maskSelect">
+                            <option value="">Auto</option>
+                            <option value="0">0</option>
+                            <option value="1">1</option>
+                            <option value="2">2</option>
+                            <option value="3">3</option>
+                            <option value="4">4</option>
+                            <option value="5">5</option>
+                            <option value="6">6</option>
+                            <option value="7">7</option>
+                        </select>
+                    </div>
+                    <div class="formGroup">
+                        <label for="versionNumber">Minimum version:</label>
+                        <input type="number" name="versionNumber" id="versionNumber" min="1" max="40" step="1"
+                            value="1">
+                    </div>
+                </form>
+            </div>
+            <div class="section" id="imageControls">
+                <h2>Image controls</h2>
+                <form id="imageForm">
+                    <div class="formGroup">
+                        <label for="imageEnable">Enable</label>
+                        <input type="checkbox" id="imageEnable" name="imageEnable">
+                    </div>
+                    <div class="formGroup">
+                        <label for="fileinput">Image:</label>
+                        <input type="file" name="fileinput" id="fileinput" accept="image/*" autocomplete="off">
+                    </div>
+                    <div class="formGroup">
+                        <label for="xOffsetNumber">X offset:</label>
+                        <input type="number" name="xOffsetNumber" id="xOffsetNumber" step="1" value="0">
+                    </div>
+                    <div class="formGroup">
+                        <label for="yOffsetNumber">Y offset:</label>
+                        <input type="number" name="yOffsetNumber" id="yOffsetNumber" step="1" value="0">
+                    </div>
+                    <div class="formGroup">
+                        <label for="threshholdNumber">Luminance threshold:</label>
+                        <input type="number" name="threshholdNumber" id="threshholdNumber" min="0" max="255" step="1"
+                            value="128">
+                    </div>
+                    <div class="formGroup">
+                        <label for="scaleNumber">Scale:</label>
+                        <input type="number" name="scaleNumber" id="scaleNumber" min="0" step="0.01" value="1.0">
+                    </div>
+                </form>
+            </div>
+            <div class="section" id="info">
+                <h2>About</h2>
+                <p>I got really interested in QR codes and wanted to mess with them, but existing qr code generators
+                    weren't flexible enough for me so I wrote my own.</p>
+                <p>It's not the fastest or best written out there but it has some features I think are neat, so I threw
+                    together a website!</p>
+                <h3>How does the image thing work?</h3>
+                <p>When there's extra space in a QR code after the data, the standard expects you to pad it with a
+                    standardized byte sequence, but it turns out nobody actually checks for that.</p>
+                <p>This gave me the idea to specifically craft a padding sequence to produce an image, and that's what
+                    this is!</p>
+                <p>Put more technically, for each bit in the padding sequence, the final position in the matrix is
+                    determined, and the value at that point in the mask pattern is XORed with the mask pattern.</p>
+                <h3>Image tips</h3>
+                <ul>
+                    <li>It's best to scale the image down a bit before uploading, QR codes only get up to 177x177 so any
+                        bigger than that will require downscaling no matter what.</li>
+                    <li>High contrast images work best.</li>
+                    <li>Transparency renders as solid black, sorry.</li>
+                    <li>If the luminance threshold doesn't produce a good result, try messing around in image editing
+                        software. You can obtain better results by prescaling the image and reducing it to 1-bit color
+                        with dithering.</li>
+                </ul>
+            </div>
+        </div>
     </div>
 </body>
 
