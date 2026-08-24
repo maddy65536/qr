@@ -18,7 +18,7 @@ jobs:
         runs-on: ubuntu-latest
         steps:
           - name: Checkout Source Code
-            uses: actions/checkout@v4
+            uses: actions/checkout@v7
 
           - name: Set up Rust Toolchain
             uses: dtolnay/rust-toolchain@stable
@@ -33,12 +33,12 @@ jobs:
             run: wasm-pack build qr-wasm --target web
 
           - name: Setup GitHub Pages Environment
-            uses: actions/configure-pages@v4
+            uses: actions/configure-pages@v6
 
           - name: Upload Build Artifacts
-            uses: actions/upload-pages-artifact@v3
+            uses: actions/upload-pages-artifact@v7
             with:
                 path: '.'
 
           - name: Deploy to GitHub Pages
-            uses: actions/deploy-pages@v4
+            uses: actions/deploy-pages@v5
